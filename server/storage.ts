@@ -1,38 +1,330 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
-
-// modify the interface with any CRUD methods
-// you might need
+import { 
+  customers, 
+  syncLogs,
+  type Customer, 
+  type InsertCustomer,
+  type CustomerFilter,
+  type CustomerListResponse,
+  type StatsSummary,
+  type SyncStatus,
+  type InsertSyncLog,
+  type SyncLog,
+} from "@shared/schema";
+import { db } from "./db";
+import { eq, sql, and, gte, lte, ilike, or, desc, asc, count } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  upsertCustomer(customer: InsertCustomer): Promise<Customer>;
+  upsertCustomers(customerList: InsertCustomer[]): Promise<number>;
+  getCustomers(filter: CustomerFilter): Promise<CustomerListResponse>;
+  getCustomerById(id: number): Promise<Customer | undefined>;
+  getCustomerByShopifyId(shopifyId: number): Promise<Customer | undefined>;
+  getStats(): Promise<StatsSummary>;
+  getSyncStatus(): Promise<SyncStatus>;
+  getDistinctTags(): Promise<string[]>;
+  getDistinctCountries(): Promise<string[]>;
+  getDistinctCities(): Promise<string[]>;
+  createSyncLog(log: InsertSyncLog): Promise<SyncLog>;
+  updateSyncLog(id: number, updates: Partial<SyncLog>): Promise<void>;
+  getLatestSyncLog(): Promise<SyncLog | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async upsertCustomer(customer: InsertCustomer): Promise<Customer> {
+    const [result] = await db
+      .insert(customers)
+      .values(customer)
+      .onConflictDoUpdate({
+        target: customers.shopifyCustomerId,
+        set: {
+          email: customer.email,
+          phone: customer.phone,
+          firstName: customer.firstName,
+          lastName: customer.lastName,
+          city: customer.city,
+          country: customer.country,
+          province: customer.province,
+          postalCode: customer.postalCode,
+          tags: customer.tags,
+          updatedAtShopify: customer.updatedAtShopify,
+          lastOrderAt: customer.lastOrderAt,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async upsertCustomers(customerList: InsertCustomer[]): Promise<number> {
+    if (customerList.length === 0) return 0;
+
+    let processed = 0;
+    for (const customer of customerList) {
+      try {
+        await this.upsertCustomer(customer);
+        processed++;
+      } catch (error) {
+        console.error(`Failed to upsert customer ${customer.shopifyCustomerId}:`, error);
+      }
+    }
+    return processed;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async getCustomers(filter: CustomerFilter): Promise<CustomerListResponse> {
+    const conditions = [];
+
+    if (filter.genderInferred && filter.genderInferred.length > 0) {
+      conditions.push(
+        or(...filter.genderInferred.map((g) => eq(customers.genderInferred, g)))
+      );
+    }
+
+    if (filter.createdFrom) {
+      conditions.push(gte(customers.createdAtShopify, new Date(filter.createdFrom)));
+    }
+
+    if (filter.createdTo) {
+      conditions.push(lte(customers.createdAtShopify, new Date(filter.createdTo)));
+    }
+
+    if (filter.lastOrderFrom) {
+      conditions.push(gte(customers.lastOrderAt, new Date(filter.lastOrderFrom)));
+    }
+
+    if (filter.lastOrderTo) {
+      conditions.push(lte(customers.lastOrderAt, new Date(filter.lastOrderTo)));
+    }
+
+    if (filter.city) {
+      conditions.push(eq(customers.city, filter.city));
+    }
+
+    if (filter.country) {
+      conditions.push(eq(customers.country, filter.country));
+    }
+
+    if (filter.tag) {
+      conditions.push(ilike(customers.tags, `%${filter.tag}%`));
+    }
+
+    if (filter.emailContains) {
+      conditions.push(ilike(customers.email, `%${filter.emailContains}%`));
+    }
+
+    if (filter.nameContains) {
+      conditions.push(
+        or(
+          ilike(customers.firstName, `%${filter.nameContains}%`),
+          ilike(customers.lastName, `%${filter.nameContains}%`)
+        )
+      );
+    }
+
+    if (filter.minConfidence !== undefined && filter.minConfidence > 0) {
+      conditions.push(gte(customers.genderConfidence, filter.minConfidence));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(customers)
+      .where(whereClause);
+
+    const totalCount = countResult?.count || 0;
+    const page = filter.page || 1;
+    const pageSize = filter.pageSize || 25;
+    const offset = (page - 1) * pageSize;
+
+    let orderByClause;
+    const sortOrder = filter.sortOrder === "asc" ? asc : desc;
+    
+    switch (filter.sortBy) {
+      case "firstName":
+        orderByClause = sortOrder(customers.firstName);
+        break;
+      case "email":
+        orderByClause = sortOrder(customers.email);
+        break;
+      case "lastOrderAt":
+        orderByClause = sortOrder(customers.lastOrderAt);
+        break;
+      case "createdAtShopify":
+      default:
+        orderByClause = sortOrder(customers.createdAtShopify);
+    }
+
+    const data = await db
+      .select()
+      .from(customers)
+      .where(whereClause)
+      .orderBy(orderByClause)
+      .limit(pageSize)
+      .offset(offset);
+
+    return {
+      data,
+      pagination: {
+        page,
+        pageSize,
+        totalCount,
+        totalPages: Math.ceil(totalCount / pageSize),
+      },
+    };
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async getCustomerById(id: number): Promise<Customer | undefined> {
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.id, id));
+    return customer;
+  }
+
+  async getCustomerByShopifyId(shopifyId: number): Promise<Customer | undefined> {
+    const [customer] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.shopifyCustomerId, shopifyId));
+    return customer;
+  }
+
+  async getStats(): Promise<StatsSummary> {
+    const [totalResult] = await db
+      .select({ count: count() })
+      .from(customers);
+
+    const [maleResult] = await db
+      .select({ count: count() })
+      .from(customers)
+      .where(eq(customers.genderInferred, "male"));
+
+    const [femaleResult] = await db
+      .select({ count: count() })
+      .from(customers)
+      .where(eq(customers.genderInferred, "female"));
+
+    const [unknownResult] = await db
+      .select({ count: count() })
+      .from(customers)
+      .where(eq(customers.genderInferred, "unknown"));
+
+    const [pendingResult] = await db
+      .select({ count: count() })
+      .from(customers)
+      .where(eq(customers.enrichmentStatus, "pending"));
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [last7Result] = await db
+      .select({ count: count() })
+      .from(customers)
+      .where(gte(customers.createdAtShopify, sevenDaysAgo));
+
+    const [last30Result] = await db
+      .select({ count: count() })
+      .from(customers)
+      .where(gte(customers.createdAtShopify, thirtyDaysAgo));
+
+    const countryBreakdown = await db
+      .select({
+        country: customers.country,
+        count: count(),
+      })
+      .from(customers)
+      .groupBy(customers.country)
+      .orderBy(desc(count()))
+      .limit(10);
+
+    return {
+      totalCustomers: totalResult?.count || 0,
+      maleCount: maleResult?.count || 0,
+      femaleCount: femaleResult?.count || 0,
+      unknownCount: unknownResult?.count || 0,
+      pendingEnrichment: pendingResult?.count || 0,
+      customersLast7Days: last7Result?.count || 0,
+      customersLast30Days: last30Result?.count || 0,
+      countryBreakdown: countryBreakdown.map((c) => ({
+        country: c.country || "Unknown",
+        count: c.count,
+      })),
+    };
+  }
+
+  async getSyncStatus(): Promise<SyncStatus> {
+    const latestLog = await this.getLatestSyncLog();
+    
+    const [countResult] = await db
+      .select({ count: count() })
+      .from(customers);
+
+    return {
+      lastSync: latestLog?.completedAt?.toISOString() || null,
+      isRunning: latestLog?.status === "running",
+      customersCount: countResult?.count || 0,
+    };
+  }
+
+  async getDistinctTags(): Promise<string[]> {
+    const results = await db
+      .selectDistinct({ tags: customers.tags })
+      .from(customers)
+      .where(sql`${customers.tags} IS NOT NULL AND ${customers.tags} != ''`);
+
+    const allTags = new Set<string>();
+    results.forEach((row) => {
+      if (row.tags) {
+        row.tags.split(",").forEach((tag) => {
+          const trimmed = tag.trim();
+          if (trimmed) allTags.add(trimmed);
+        });
+      }
+    });
+
+    return Array.from(allTags).sort();
+  }
+
+  async getDistinctCountries(): Promise<string[]> {
+    const results = await db
+      .selectDistinct({ country: customers.country })
+      .from(customers)
+      .where(sql`${customers.country} IS NOT NULL AND ${customers.country} != ''`)
+      .orderBy(customers.country);
+
+    return results.map((r) => r.country!).filter(Boolean);
+  }
+
+  async getDistinctCities(): Promise<string[]> {
+    const results = await db
+      .selectDistinct({ city: customers.city })
+      .from(customers)
+      .where(sql`${customers.city} IS NOT NULL AND ${customers.city} != ''`)
+      .orderBy(customers.city);
+
+    return results.map((r) => r.city!).filter(Boolean);
+  }
+
+  async createSyncLog(log: InsertSyncLog): Promise<SyncLog> {
+    const [result] = await db.insert(syncLogs).values(log).returning();
+    return result;
+  }
+
+  async updateSyncLog(id: number, updates: Partial<SyncLog>): Promise<void> {
+    await db.update(syncLogs).set(updates).where(eq(syncLogs.id, id));
+  }
+
+  async getLatestSyncLog(): Promise<SyncLog | undefined> {
+    const [result] = await db
+      .select()
+      .from(syncLogs)
+      .orderBy(desc(syncLogs.startedAt))
+      .limit(1);
+    return result;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
