@@ -19,12 +19,23 @@ async function inferGender(
   email: string | null,
   country: string | null
 ): Promise<GenderInferenceResult> {
-  const nameInfo = [firstName, lastName].filter(Boolean).join(" ") || "unknown";
+  const nameParts = [firstName, lastName].filter(Boolean);
+  let primaryIdentifier = nameParts.join(" ").trim();
+  let identifierSource: "name" | "email" | "unknown" = nameParts.length > 0 ? "name" : "unknown";
+
+  if (!primaryIdentifier) {
+    const emailLocalPart = email?.split("@")[0]?.replace(/[._]/g, " ")?.trim();
+    if (emailLocalPart) {
+      primaryIdentifier = emailLocalPart;
+      identifierSource = "email";
+    }
+  }
+
   const emailDomain = email?.split("@")[1] || "";
-  
+
   const prompt = `Based on this person's information, infer their likely gender for marketing purposes.
-Name: ${nameInfo}
-Email domain: ${emailDomain}
+Primary identifier (${identifierSource}): ${primaryIdentifier || "unknown"}
+Email domain: ${emailDomain || "unknown"}
 Country: ${country || "unknown"}
 
 Respond with JSON only: {"gender": "male" | "female" | "unknown", "confidence": 0.0-1.0}`;
@@ -123,6 +134,23 @@ export async function enrichPendingCustomers(batchSize = 10): Promise<number> {
 
   log(`Enriched ${enrichedCount} customers`, "enrichment");
   return enrichedCount;
+}
+
+export async function enrichAllPendingCustomers(batchSize = 10): Promise<number> {
+  let totalEnriched = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const enriched = await enrichPendingCustomers(batchSize);
+    totalEnriched += enriched;
+    hasMore = enriched > 0;
+
+    if (hasMore) {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+
+  return totalEnriched;
 }
 
 export async function runEnrichmentLoop(): Promise<void> {
