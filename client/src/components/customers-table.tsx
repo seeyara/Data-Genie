@@ -9,7 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpDown, ArrowUp, ArrowDown, Users, DollarSign } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Users } from "lucide-react";
 import { format } from "date-fns";
 import type { Customer, CustomerFilter } from "@shared/schema";
 
@@ -238,7 +238,7 @@ export function CustomersTable({
                 </div>
               </TableCell>
               <TableCell className="font-medium">
-                ${(customer.totalSpent ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ₹{(customer.totalSpent ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </TableCell>
               <TableCell className="text-center">
                 {customer.ordersCount ?? 0}

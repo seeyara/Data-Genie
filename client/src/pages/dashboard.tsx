@@ -12,7 +12,7 @@ import { ExportButton } from "@/components/export-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Loader2, SlidersHorizontal, Sparkles, Store } from "lucide-react";
+import { Loader2, RefreshCw, SlidersHorizontal, Sparkles, Store } from "lucide-react";
 import type { 
   CustomerFilter, 
   CustomerListResponse, 
@@ -29,16 +29,17 @@ const defaultFilters: CustomerFilter = {
 
 function buildQueryString(filters: CustomerFilter): string {
   const params = new URLSearchParams();
-  
+
   if (filters.genderInferred?.length) {
     filters.genderInferred.forEach((g) => params.append("genderInferred", g));
+  }
+  if (filters.city?.length) {
+    filters.city.forEach((city) => params.append("city", city));
   }
   if (filters.createdFrom) params.set("createdFrom", filters.createdFrom);
   if (filters.createdTo) params.set("createdTo", filters.createdTo);
   if (filters.lastOrderFrom) params.set("lastOrderFrom", filters.lastOrderFrom);
   if (filters.lastOrderTo) params.set("lastOrderTo", filters.lastOrderTo);
-  if (filters.city) params.set("city", filters.city);
-  if (filters.country) params.set("country", filters.country);
   if (filters.tag) params.set("tag", filters.tag);
   if (filters.emailContains) params.set("emailContains", filters.emailContains);
   if (filters.nameContains) params.set("nameContains", filters.nameContains);
@@ -76,7 +77,6 @@ export default function Dashboard() {
 
   const { data: filterOptions } = useQuery<{
     tags: string[];
-    countries: string[];
     cities: string[];
   }>({
     queryKey: ["/api/customers/filter-options"],
@@ -132,6 +132,31 @@ export default function Dashboard() {
     },
   });
 
+  const resetEnrichmentMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/enrich/reset");
+      return res.json() as Promise<{ customersMarkedPending: number }>;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Gender predictions reset",
+        description: data.customersMarkedPending
+          ? `${data.customersMarkedPending} customers marked for re-inference.`
+          : "No customers needed updating.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers?" + queryString] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers/filter-options"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Reset failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleApplyFilters = useCallback(() => {
     setAppliedFilters({ ...filters, page: 1 });
     setMobileFiltersOpen(false);
@@ -142,6 +167,23 @@ export default function Dashboard() {
     setFilters(cleared);
     setAppliedFilters(cleared);
   }, []);
+
+  const handleResetAndEnrich = useCallback(async () => {
+    try {
+      await resetEnrichmentMutation.mutateAsync();
+      if (!enrichmentMutation.isPending) {
+        enrichmentMutation.mutate();
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        toast({
+          title: "Reset failed",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    }
+  }, [enrichmentMutation, resetEnrichmentMutation, toast]);
 
   const handlePageChange = useCallback((page: number) => {
     setAppliedFilters((prev) => ({ ...prev, page }));
@@ -202,7 +244,6 @@ export default function Dashboard() {
       onApply={handleApplyFilters}
       onClear={handleClearFilters}
       distinctTags={filterOptions?.tags || []}
-      distinctCountries={filterOptions?.countries || []}
       distinctCities={filterOptions?.cities || []}
       isLoading={customersLoading}
     />
@@ -264,7 +305,7 @@ export default function Dashboard() {
 
             <div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
                   <Button
                     variant="secondary"
                     onClick={() => enrichmentMutation.mutate()}
@@ -284,6 +325,28 @@ export default function Dashboard() {
                       <>
                         <Sparkles className="mr-2 h-4 w-4" />
                         Enrich pending customers
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleResetAndEnrich}
+                    disabled={
+                      resetEnrichmentMutation.isPending ||
+                      enrichmentMutation.isPending ||
+                      statsLoading
+                    }
+                    data-testid="button-reset-enrichment"
+                  >
+                    {resetEnrichmentMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Resetting predictions...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Reset & re-run inference
                       </>
                     )}
                   </Button>

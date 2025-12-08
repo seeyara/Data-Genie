@@ -1,6 +1,16 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserCheck, UserX, UserMinus, Clock, CalendarDays, DollarSign, ShoppingCart, TrendingUp } from "lucide-react";
+import {
+  Users,
+  UserCheck,
+  UserX,
+  UserMinus,
+  Clock,
+  CalendarDays,
+  IndianRupee,
+  ShoppingCart,
+  TrendingUp,
+} from "lucide-react";
 import type { StatsSummary } from "@shared/schema";
 
 interface StatsCardsProps {
@@ -97,10 +107,10 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
               <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 TOTAL REVENUE
               </span>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <IndianRupee className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-3xl font-bold" data-testid="stat-total-revenue">
-              ${(stats?.totalRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{(stats?.totalRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-sm text-muted-foreground mt-1">from all customers</p>
           </CardContent>
@@ -114,7 +124,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
               <ShoppingCart className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-3xl font-bold" data-testid="stat-avg-order-value">
-              ${(stats?.averageOrderValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{(stats?.averageOrderValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-sm text-muted-foreground mt-1">per order</p>
           </CardContent>
@@ -128,7 +138,7 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="text-3xl font-bold" data-testid="stat-avg-ltv">
-              ${(stats?.averageLtv ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              ₹{(stats?.averageLtv ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-sm text-muted-foreground mt-1">per customer</p>
           </CardContent>
