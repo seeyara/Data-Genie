@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { customerFilterSchema } from "@shared/schema";
 import { syncCustomers, startSyncSchedule, isSyncInProgress } from "./syncJob";
 import { verifyWebhookSignature } from "./shopifyClient";
-import { enrichPendingCustomers } from "./enrichment";
+import { enrichAllPendingCustomers } from "./enrichment";
 import Papa from "papaparse";
 import { log } from "./index";
 
@@ -189,7 +189,7 @@ export async function registerRoutes(
 
   app.post("/api/admin/enrich", async (_req: Request, res: Response) => {
     try {
-      const enriched = await enrichPendingCustomers(50);
+      const enriched = await enrichAllPendingCustomers(50);
       res.json({ message: "Enrichment completed", enrichedCount: enriched });
     } catch (error) {
       log(`Error running enrichment: ${error}`, "api");

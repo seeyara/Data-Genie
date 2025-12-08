@@ -10,8 +10,9 @@ import { PaginationControls } from "@/components/pagination-controls";
 import { SyncStatusPanel } from "@/components/sync-status";
 import { ExportButton } from "@/components/export-button";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { SlidersHorizontal, Store } from "lucide-react";
+import { Loader2, SlidersHorizontal, Sparkles, Store } from "lucide-react";
 import type { 
   CustomerFilter, 
   CustomerListResponse, 
@@ -67,6 +68,8 @@ export default function Dashboard() {
     queryKey: ["/api/stats/summary"],
   });
 
+  const pendingEnrichment = stats?.pendingEnrichment ?? 0;
+
   const { data: syncStatus, isLoading: syncStatusLoading } = useQuery<SyncStatus>({
     queryKey: ["/api/sync/status"],
   });
@@ -99,6 +102,30 @@ export default function Dashboard() {
     onError: (error: Error) => {
       toast({
         title: "Sync failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const enrichmentMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/enrich");
+      return res.json() as Promise<{ enrichedCount: number }>;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Enrichment complete",
+        description: data.enrichedCount
+          ? `${data.enrichedCount} customers processed.`
+          : "No pending customers needed enrichment.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats/summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers?" + queryString] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Enrichment failed",
         description: error.message,
         variant: "destructive",
       });
@@ -236,11 +263,47 @@ export default function Dashboard() {
             </div>
 
             <div>
-              <ExportButton
-                totalCount={customersData?.pagination.totalCount || 0}
-                isExporting={isExporting}
-                onExport={handleExport}
-              />
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => enrichmentMutation.mutate()}
+                    disabled={
+                      enrichmentMutation.isPending ||
+                      pendingEnrichment === 0 ||
+                      statsLoading
+                    }
+                    data-testid="button-enrich-pending"
+                  >
+                    {enrichmentMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Running enrichment...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Enrich pending customers
+                      </>
+                    )}
+                  </Button>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Badge variant="outline">{pendingEnrichment} pending</Badge>
+                    <span>
+                      {pendingEnrichment > 0
+                        ? "Trigger AI gender inference for customers still waiting on enrichment."
+                        : "All customers are enriched."
+                      }
+                    </span>
+                  </div>
+                </div>
+
+                <ExportButton
+                  totalCount={customersData?.pagination.totalCount || 0}
+                  isExporting={isExporting}
+                  onExport={handleExport}
+                />
+              </div>
 
               <CustomersTable
                 customers={customersData?.data || []}
