@@ -23,14 +23,20 @@ export async function registerRoutes(
         ? [String(genderInferred)]
         : undefined;
 
+      const city = req.query.city;
+      const cityArray = Array.isArray(city)
+        ? city.map(String)
+        : city
+        ? [String(city)]
+        : undefined;
+
       const filter = customerFilterSchema.parse({
         genderInferred: genderArray,
         createdFrom: req.query.createdFrom as string | undefined,
         createdTo: req.query.createdTo as string | undefined,
         lastOrderFrom: req.query.lastOrderFrom as string | undefined,
         lastOrderTo: req.query.lastOrderTo as string | undefined,
-        city: req.query.city as string | undefined,
-        country: req.query.country as string | undefined,
+        city: cityArray,
         tag: req.query.tag as string | undefined,
         emailContains: req.query.emailContains as string | undefined,
         nameContains: req.query.nameContains as string | undefined,
@@ -72,14 +78,20 @@ export async function registerRoutes(
         ? [String(genderInferred)]
         : undefined;
 
+      const city = req.query.city;
+      const cityArray = Array.isArray(city)
+        ? city.map(String)
+        : city
+        ? [String(city)]
+        : undefined;
+
       const filter = customerFilterSchema.parse({
         genderInferred: genderArray,
         createdFrom: req.query.createdFrom as string | undefined,
         createdTo: req.query.createdTo as string | undefined,
         lastOrderFrom: req.query.lastOrderFrom as string | undefined,
         lastOrderTo: req.query.lastOrderTo as string | undefined,
-        city: req.query.city as string | undefined,
-        country: req.query.country as string | undefined,
+        city: cityArray,
         tag: req.query.tag as string | undefined,
         emailContains: req.query.emailContains as string | undefined,
         nameContains: req.query.nameContains as string | undefined,
@@ -135,13 +147,12 @@ export async function registerRoutes(
 
   app.get("/api/customers/filter-options", async (_req: Request, res: Response) => {
     try {
-      const [tags, countries, cities] = await Promise.all([
+      const [tags, cities] = await Promise.all([
         storage.getDistinctTags(),
-        storage.getDistinctCountries(),
         storage.getDistinctCities(),
       ]);
 
-      res.json({ tags, countries, cities });
+      res.json({ tags, cities });
     } catch (error) {
       log(`Error fetching filter options: ${error}`, "api");
       res.status(500).json({ error: "Failed to fetch filter options" });
@@ -194,6 +205,19 @@ export async function registerRoutes(
     } catch (error) {
       log(`Error running enrichment: ${error}`, "api");
       res.status(500).json({ error: "Enrichment failed" });
+    }
+  });
+
+  app.post("/api/admin/enrich/reset", async (_req: Request, res: Response) => {
+    try {
+      const updated = await storage.resetAllEnrichments();
+      res.json({
+        message: "Enrichment statuses reset",
+        customersMarkedPending: updated,
+      });
+    } catch (error) {
+      log(`Error resetting enrichment: ${error}`, "api");
+      res.status(500).json({ error: "Failed to reset enrichment statuses" });
     }
   });
 

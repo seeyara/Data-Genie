@@ -22,8 +22,8 @@ export interface IStorage {
   getStats(): Promise<StatsSummary>;
   getSyncStatus(): Promise<SyncStatus>;
   getDistinctTags(): Promise<string[]>;
-  getDistinctCountries(): Promise<string[]>;
   getDistinctCities(): Promise<string[]>;
+  resetAllEnrichments(): Promise<number>;
   createSyncLog(log: InsertSyncLog): Promise<SyncLog>;
   updateSyncLog(id: number, updates: Partial<SyncLog>): Promise<void>;
   getLatestSyncLog(): Promise<SyncLog | undefined>;
@@ -97,12 +97,8 @@ export class DatabaseStorage implements IStorage {
       conditions.push(lte(customers.lastOrderAt, new Date(filter.lastOrderTo)));
     }
 
-    if (filter.city) {
-      conditions.push(eq(customers.city, filter.city));
-    }
-
-    if (filter.country) {
-      conditions.push(eq(customers.country, filter.country));
+    if (filter.city && filter.city.length > 0) {
+      conditions.push(or(...filter.city.map((city) => eq(customers.city, city))));
     }
 
     if (filter.tag) {
@@ -328,16 +324,6 @@ export class DatabaseStorage implements IStorage {
     return Array.from(allTags).sort();
   }
 
-  async getDistinctCountries(): Promise<string[]> {
-    const results = await db
-      .selectDistinct({ country: customers.country })
-      .from(customers)
-      .where(sql`${customers.country} IS NOT NULL AND ${customers.country} != ''`)
-      .orderBy(customers.country);
-
-    return results.map((r) => r.country!).filter(Boolean);
-  }
-
   async getDistinctCities(): Promise<string[]> {
     const results = await db
       .selectDistinct({ city: customers.city })
@@ -346,6 +332,20 @@ export class DatabaseStorage implements IStorage {
       .orderBy(customers.city);
 
     return results.map((r) => r.city!).filter(Boolean);
+  }
+
+  async resetAllEnrichments(): Promise<number> {
+    const results = await db
+      .update(customers)
+      .set({
+        genderInferred: null,
+        genderConfidence: null,
+        enrichmentStatus: "pending",
+        updatedAt: new Date(),
+      })
+      .returning({ id: customers.id });
+
+    return results.length;
   }
 
   async createSyncLog(log: InsertSyncLog): Promise<SyncLog> {

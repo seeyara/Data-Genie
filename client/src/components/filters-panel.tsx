@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CalendarIcon, X, Filter, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -27,7 +28,6 @@ interface FiltersPanelProps {
   onApply: () => void;
   onClear: () => void;
   distinctTags: string[];
-  distinctCountries: string[];
   distinctCities: string[];
   isLoading?: boolean;
 }
@@ -38,7 +38,6 @@ export function FiltersPanel({
   onApply,
   onClear,
   distinctTags,
-  distinctCountries,
   distinctCities,
   isLoading,
 }: FiltersPanelProps) {
@@ -58,6 +57,14 @@ export function FiltersPanel({
   };
 
   const genderOptions: Gender[] = ["male", "female", "unknown"];
+
+  const handleCityToggle = (city: string) => {
+    const current = filters.city || [];
+    const updated = current.includes(city)
+      ? current.filter((c) => c !== city)
+      : [...current, city];
+    updateFilter("city", updated.length > 0 ? updated : undefined);
+  };
 
   return (
     <div className="space-y-6">
@@ -224,50 +231,27 @@ export function FiltersPanel({
 
         <div className="space-y-2">
           <Label className="text-xs font-medium uppercase tracking-wide">
-            Country
-          </Label>
-          <Select
-            value={filters.country || "all"}
-            onValueChange={(value) =>
-              updateFilter("country", value === "all" ? undefined : value)
-            }
-          >
-            <SelectTrigger data-testid="filter-country">
-              <SelectValue placeholder="All countries" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All countries</SelectItem>
-              {distinctCountries.map((country) => (
-                <SelectItem key={country} value={country}>
-                  {country}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs font-medium uppercase tracking-wide">
             City
           </Label>
-          <Select
-            value={filters.city || "all"}
-            onValueChange={(value) =>
-              updateFilter("city", value === "all" ? undefined : value)
-            }
-          >
-            <SelectTrigger data-testid="filter-city">
-              <SelectValue placeholder="All cities" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All cities</SelectItem>
-              {distinctCities.map((city) => (
-                <SelectItem key={city} value={city}>
-                  {city}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
+            {distinctCities.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No cities available</p>
+            ) : (
+              distinctCities.map((city) => (
+                <div className="flex items-center space-x-2" key={city}>
+                  <Checkbox
+                    id={`city-${city}`}
+                    checked={filters.city?.includes(city) ?? false}
+                    onCheckedChange={() => handleCityToggle(city)}
+                    data-testid={`filter-city-${city}`}
+                  />
+                  <Label htmlFor={`city-${city}`} className="text-sm font-normal">
+                    {city}
+                  </Label>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         <div className="space-y-2">
