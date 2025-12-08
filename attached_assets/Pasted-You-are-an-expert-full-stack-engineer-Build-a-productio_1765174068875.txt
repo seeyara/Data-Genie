@@ -1,0 +1,196 @@
+You are an expert full-stack engineer. Build a production-ready web app that acts as a marketing data layer for a single Shopify store.
+
+High-level:
+- Stack: Node.js + Express (backend), React + Vite (frontend), PostgreSQL (DB), Prisma or Knex as ORM.
+- Single repo on Replit with server + client.
+- Use a `.env` file for secrets.
+
+Assumptions:
+- There is exactly ONE Shopify store.
+- I will create a **custom app** in Shopify Admin and copy the Admin API access token.
+- No OAuth, no embedded app, no App Store listing, no multi-tenant support.
+
+Environment variables:
+- SHOPIFY_STORE_DOMAIN=example.myshopify.com
+- SHOPIFY_ADMIN_ACCESS_TOKEN=xxxx
+- SHOPIFY_API_VERSION=latest          # use the "latest" REST version path as in the docs
+- SHOPIFY_WEBHOOK_SECRET=xxxx         # from the custom app's webhook shared secret
+- DATABASE_URL=postgres://...
+- OPENAI_API_KEY=xxxx
+- WRITE_BACK_TO_SHOPIFY=true|false
+
+Core idea:
+- Mirror Shopify customers into Postgres.
+- Enrich each customer with an LLM-inferred gender.
+- Provide a UI to filter customers and export CSV.
+- Optionally write gender back to Shopify as a customer metafield and/or tag.
+
+Data model (Postgres):
+- `customers`:
+  - id (pk)
+  - shopify_customer_id (bigint, unique)
+  - email
+  - phone
+  - first_name
+  - last_name
+  - city
+  - country
+  - province
+  - postal_code
+  - tags (text[] or comma-separated)
+  - created_at_shopify (timestamp)   # from Shopify `created_at`
+  - updated_at_shopify (timestamp)   # from Shopify `updated_at`
+  - last_order_at (timestamp, nullable)   # derived from Orders API or from customer.last_order_id if you choose
+  - gender_inferred (text enum: "male" | "female" | "unknown")
+  - gender_confidence (float 0–1, nullable)
+  - enrichment_status (text enum: "pending" | "complete" | "failed")
+  - created_at (timestamp default now)
+  - updated_at (timestamp default now)
+
+Shopify REST Customer API compliance:
+- Follow the official Shopify REST Admin Customer docs:
+  - https://shopify.dev/docs/api/admin-rest/latest/resources/customer
+- Use the `latest` REST path:
+  - GET https://{SHOPIFY_STORE_DOMAIN}/admin/api/${SHOPIFY_API_VERSION}/customers.json
+  - GET https://{SHOPIFY_STORE_DOMAIN}/admin/api/${SHOPIFY_API_VERSION}/customers/search.json
+  - PUT https://{SHOPIFY_STORE_DOMAIN}/admin/api/${SHOPIFY_API_VERSION}/customers/{id}.json
+- Authenticate with header:
+  - "X-Shopify-Access-Token": SHOPIFY_ADMIN_ACCESS_TOKEN
+- When mapping customers, use fields from the docs:
+  - id, email, phone, first_name, last_name, created_at, updated_at, tags
+  - default_address.city, default_address.country, default_address.province, default_address.zip
+  - If you derive last_order_at, use the Orders API or customer.last_order_id as needed.
+
+Metafields for gender (write-back when WRITE_BACK_TO_SHOPIFY=true):
+- For each enriched customer, optionally upsert a metafield:
+  - POST or PUT https://{SHOPIFY_STORE_DOMAIN}/admin/api/${SHOPIFY_API_VERSION}/customers/{id}/metafields.json
+  - Body:
+    {
+      "metafield": {
+        "namespace": "marketing",
+        "key": "inferred_gender",
+        "type": "single_line_text_field",
+        "value": "male" | "female" | "unknown",
+        "description": "LLM-inferred gender used for marketing segmentation."
+      }
+    }
+
+Sync logic (no OAuth, single store):
+- Implement a "sync customers" job in the backend using node-cron:
+  - Runs every N minutes (e.g. 15 minutes) or hourly.
+  - Uses Shopify REST Admin customers endpoint with updated_at filtering:
+    - Example: GET /customers.json?limit=250&updated_at_min=<last_seen_updated_at>
+  - Use cursor-based pagination with `limit` and `page_info` as per docs.
+  - For each page:
+    - Upsert into `customers` table keyed by `shopify_customer_id`.
+    - Update updated_at_shopify, tags, address info, etc.
+- Additionally, provide a manual admin endpoint:
+  - POST /api/admin/sync/customers
+  - Triggers a full or incremental sync for debugging.
+
+Webhooks (optional but recommended):
+- Define Express routes:
+  - POST /webhooks/customers/create
+  - POST /webhooks/customers/update
+- Verify webhook HMAC using SHOPIFY_WEBHOOK_SECRET and `X-Shopify-Hmac-Sha256` header:
+  - If invalid → respond 401 and ignore.
+  - If valid → parse customer payload and upsert into DB.
+- I will configure these webhooks in Shopify Admin UI or you can include a one-time script/endpoint that registers them via REST using SHOPIFY_ADMIN_ACCESS_TOKEN.
+
+Rate limits & errors:
+- Inspect `X-Shopify-Shop-Api-Call-Limit` header and implement basic backoff when approaching the limit.
+- On non-2xx responses, log error details and retry for safe cases (5xx, timeouts) with exponential backoff.
+- Avoid tight loops; respect Shopify’s rate limits.
+
+LLM enrichment (gender inference):
+- Implement a background worker/job inside the backend:
+  - Periodically fetch a batch of customers where enrichment_status = "pending".
+  - For each, call OpenAI Chat Completions with a **very small prompt** using:
+    - first_name, last_name, email, country if helpful.
+  - Prompt should ask for JSON only:
+    {
+      "gender": "male" | "female" | "unknown",
+      "confidence": 0.0–1.0
+    }
+  - Parse JSON, store `gender_inferred`, `gender_confidence`, and set `enrichment_status` to "complete" or "failed".
+- Batch or throttle LLM calls to avoid hitting rate limits.
+
+Backend API for frontend:
+- Prefix all API routes with `/api`.
+- Endpoints:
+  - GET /api/customers
+    - Query params:
+      - gender_inferred = "male|female|unknown" (allow multiple)
+      - created_from, created_to (date range on created_at_shopify)
+      - last_order_from, last_order_to (date range on last_order_at)
+      - city, country
+      - tag (single or multiple)
+      - email_contains, name_contains
+      - min_confidence
+      - page, pageSize
+    - Returns:
+      - data: [customers...]
+      - pagination info (page, pageSize, totalCount)
+  - GET /api/customers/export
+    - Same filters as /api/customers.
+    - Returns CSV file with columns:
+      - name, email, phone, city, country, tags, gender_inferred, gender_confidence, created_at_shopify, last_order_at
+  - GET /api/stats/summary
+    - Returns aggregates:
+      - total_customers
+      - counts by gender_inferred
+      - customers_added_last_7_days, last_30_days
+      - optional: breakdown by country.
+
+Frontend (React + Vite):
+- No auth for now (single-tenant, internal tool).
+- Layout:
+  - Simple header with app name (e.g. “Shopify Customer Segmenter”).
+- Filters panel:
+  - Dropdown for gender (All, Male, Female, Unknown).
+  - Date range pickers for created_at and last_order_at.
+  - Multi-select tags (fetch distinct tags from backend).
+  - Inputs for city, country, email contains, name contains.
+  - Numeric or slider input for min_confidence.
+  - “Apply Filters” and “Clear” buttons.
+- Customers table:
+  - Paginated table:
+    - Columns: Name, Email, City, Country, Tags, Gender (with confidence), Created (Shopify), Last Order.
+    - Sorting on at least created_at_shopify and last_order_at.
+- Export:
+  - “Export CSV” button that calls /api/customers/export with current filters and triggers a file download.
+- Summary:
+  - Simple cards showing:
+    - Total customers
+    - Female / Male / Unknown counts
+    - New last 7/30 days.
+
+Engineering details:
+- Use TypeScript for backend and frontend if possible.
+- Separate concerns:
+  - `/server/shopifyClient` for Shopify REST calls (customers, metafields).
+  - `/server/jobs` for cron + enrichment jobs.
+  - `/server/routes` for API + webhooks.
+- Add DB migrations:
+  - If using Prisma: include `schema.prisma` and scripts for `prisma migrate dev` / `deploy`.
+  - If using Knex: include migration files and scripts.
+- Root scripts:
+  - `npm run dev` → concurrently run backend and frontend in Replit.
+  - `npm run build` and `npm run start` for production.
+- Provide a README with:
+  - How to set env vars.
+  - How to run migrations.
+  - How to start the app.
+  - How to configure webhooks in Shopify Admin.
+
+Goal:
+- After I:
+  - Create a Shopify custom app and copy the Admin API token + webhook secret.
+  - Fill `.env` with SHOPIFY_STORE_DOMAIN, SHOPIFY_ADMIN_ACCESS_TOKEN, SHOPIFY_WEBHOOK_SECRET, DATABASE_URL, OPENAI_API_KEY.
+  - Run DB migrations and start the app on Replit.
+- I should be able to:
+  1) Trigger an initial customer sync.
+  2) See customers appear in the UI.
+  3) Wait for enrichment to populate gender_inferred.
+  4) Filter customers and export a CSV of any segment.
+  5) (If WRITE_BACK_TO_SHOPIFY=true) see gender metafields/tags appear on customers in Shopify.
