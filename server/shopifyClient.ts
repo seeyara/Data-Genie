@@ -13,6 +13,9 @@ interface ShopifyCustomer {
   created_at: string;
   updated_at: string;
   tags: string;
+  orders_count: number;
+  total_spent: string;
+  last_order_id: number | null;
   default_address?: {
     city: string | null;
     country: string | null;
@@ -96,6 +99,8 @@ export interface TransformedCustomer {
   province: string | null;
   postalCode: string | null;
   tags: string | null;
+  ordersCount: number;
+  totalSpent: number;
   createdAtShopify: Date;
   updatedAtShopify: Date;
 }
@@ -112,6 +117,8 @@ function transformCustomer(customer: ShopifyCustomer): TransformedCustomer {
     province: customer.default_address?.province || null,
     postalCode: customer.default_address?.zip || null,
     tags: customer.tags || null,
+    ordersCount: customer.orders_count || 0,
+    totalSpent: parseFloat(customer.total_spent) || 0,
     createdAtShopify: new Date(customer.created_at),
     updatedAtShopify: new Date(customer.updated_at),
   };

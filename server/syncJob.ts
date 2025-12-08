@@ -57,6 +57,8 @@ export async function syncCustomers(incremental = true): Promise<{
           tags: customer.tags,
           createdAtShopify: customer.createdAtShopify,
           updatedAtShopify: customer.updatedAtShopify,
+          totalSpent: customer.totalSpent,
+          ordersCount: customer.ordersCount,
           enrichmentStatus: existing?.enrichmentStatus || "pending",
           genderInferred: existing?.genderInferred,
           genderConfidence: existing?.genderConfidence,

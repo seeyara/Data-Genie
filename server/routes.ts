@@ -37,6 +37,18 @@ export async function registerRoutes(
         minConfidence: req.query.minConfidence
           ? parseFloat(req.query.minConfidence as string)
           : undefined,
+        minTotalSpent: req.query.minTotalSpent
+          ? parseFloat(req.query.minTotalSpent as string)
+          : undefined,
+        maxTotalSpent: req.query.maxTotalSpent
+          ? parseFloat(req.query.maxTotalSpent as string)
+          : undefined,
+        minOrdersCount: req.query.minOrdersCount
+          ? parseInt(req.query.minOrdersCount as string)
+          : undefined,
+        maxOrdersCount: req.query.maxOrdersCount
+          ? parseInt(req.query.maxOrdersCount as string)
+          : undefined,
         page: req.query.page ? parseInt(req.query.page as string) : 1,
         pageSize: req.query.pageSize ? parseInt(req.query.pageSize as string) : 25,
         sortBy: req.query.sortBy as any,
@@ -74,6 +86,18 @@ export async function registerRoutes(
         minConfidence: req.query.minConfidence
           ? parseFloat(req.query.minConfidence as string)
           : undefined,
+        minTotalSpent: req.query.minTotalSpent
+          ? parseFloat(req.query.minTotalSpent as string)
+          : undefined,
+        maxTotalSpent: req.query.maxTotalSpent
+          ? parseFloat(req.query.maxTotalSpent as string)
+          : undefined,
+        minOrdersCount: req.query.minOrdersCount
+          ? parseInt(req.query.minOrdersCount as string)
+          : undefined,
+        maxOrdersCount: req.query.maxOrdersCount
+          ? parseInt(req.query.maxOrdersCount as string)
+          : undefined,
         page: 1,
         pageSize: 10000,
       });
@@ -89,6 +113,8 @@ export async function registerRoutes(
         tags: customer.tags || "",
         gender_inferred: customer.genderInferred || "",
         gender_confidence: customer.genderConfidence?.toFixed(2) || "",
+        total_spent: customer.totalSpent?.toFixed(2) || "0.00",
+        orders_count: customer.ordersCount || 0,
         created_at_shopify: customer.createdAtShopify?.toISOString() || "",
         last_order_at: customer.lastOrderAt?.toISOString() || "",
       }));
@@ -194,6 +220,8 @@ export async function registerRoutes(
         province: customer.default_address?.province,
         postalCode: customer.default_address?.zip,
         tags: customer.tags,
+        ordersCount: customer.orders_count || 0,
+        totalSpent: parseFloat(customer.total_spent) || 0,
         createdAtShopify: new Date(customer.created_at),
         updatedAtShopify: new Date(customer.updated_at),
         enrichmentStatus: "pending",
@@ -231,6 +259,8 @@ export async function registerRoutes(
         province: customer.default_address?.province,
         postalCode: customer.default_address?.zip,
         tags: customer.tags,
+        ordersCount: customer.orders_count || 0,
+        totalSpent: parseFloat(customer.total_spent) || 0,
         createdAtShopify: new Date(customer.created_at),
         updatedAtShopify: new Date(customer.updated_at),
         enrichmentStatus: existing?.enrichmentStatus || "pending",

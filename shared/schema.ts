@@ -1,6 +1,5 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, bigint, timestamp, real, integer } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const genderEnum = ["male", "female", "unknown"] as const;
@@ -24,6 +23,8 @@ export const customers = pgTable("customers", {
   createdAtShopify: timestamp("created_at_shopify"),
   updatedAtShopify: timestamp("updated_at_shopify"),
   lastOrderAt: timestamp("last_order_at"),
+  totalSpent: real("total_spent").default(0),
+  ordersCount: integer("orders_count").default(0),
   genderInferred: text("gender_inferred").$type<Gender>(),
   genderConfidence: real("gender_confidence"),
   enrichmentStatus: text("enrichment_status").$type<EnrichmentStatus>().default("pending").notNull(),
@@ -31,14 +32,8 @@ export const customers = pgTable("customers", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-export const insertCustomerSchema = createInsertSchema(customers).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type InsertCustomer = z.infer<typeof insertCustomerSchema>;
 export type Customer = typeof customers.$inferSelect;
+export type InsertCustomer = typeof customers.$inferInsert;
 
 export const syncLogs = pgTable("sync_logs", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
@@ -52,12 +47,8 @@ export const syncLogs = pgTable("sync_logs", {
   completedAt: timestamp("completed_at"),
 });
 
-export const insertSyncLogSchema = createInsertSchema(syncLogs).omit({
-  id: true,
-});
-
-export type InsertSyncLog = z.infer<typeof insertSyncLogSchema>;
 export type SyncLog = typeof syncLogs.$inferSelect;
+export type InsertSyncLog = typeof syncLogs.$inferInsert;
 
 export const customerFilterSchema = z.object({
   genderInferred: z.array(z.enum(genderEnum)).optional(),
@@ -71,9 +62,13 @@ export const customerFilterSchema = z.object({
   emailContains: z.string().optional(),
   nameContains: z.string().optional(),
   minConfidence: z.number().min(0).max(1).optional(),
+  minTotalSpent: z.number().min(0).optional(),
+  maxTotalSpent: z.number().min(0).optional(),
+  minOrdersCount: z.number().min(0).optional(),
+  maxOrdersCount: z.number().min(0).optional(),
   page: z.number().min(1).default(1),
   pageSize: z.number().min(1).max(100).default(25),
-  sortBy: z.enum(["createdAtShopify", "lastOrderAt", "firstName", "email"]).optional(),
+  sortBy: z.enum(["createdAtShopify", "lastOrderAt", "firstName", "email", "totalSpent", "ordersCount"]).optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
@@ -97,6 +92,9 @@ export interface StatsSummary {
   pendingEnrichment: number;
   customersLast7Days: number;
   customersLast30Days: number;
+  totalRevenue: number;
+  averageOrderValue: number;
+  averageLtv: number;
   countryBreakdown: { country: string; count: number }[];
 }
 
@@ -112,10 +110,5 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;

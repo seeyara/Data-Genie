@@ -331,6 +331,62 @@ export function FiltersPanel({
             data-testid="filter-min-confidence"
           />
         </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-medium uppercase tracking-wide">
+            Total Spent Range
+          </Label>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs mb-1 block text-muted-foreground">Min</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={filters.minTotalSpent ?? ""}
+                onChange={(e) => updateFilter("minTotalSpent", e.target.value ? parseFloat(e.target.value) : undefined)}
+                data-testid="filter-min-total-spent"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block text-muted-foreground">Max</Label>
+              <Input
+                type="number"
+                placeholder="No limit"
+                value={filters.maxTotalSpent ?? ""}
+                onChange={(e) => updateFilter("maxTotalSpent", e.target.value ? parseFloat(e.target.value) : undefined)}
+                data-testid="filter-max-total-spent"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-medium uppercase tracking-wide">
+            Orders Count Range
+          </Label>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs mb-1 block text-muted-foreground">Min</Label>
+              <Input
+                type="number"
+                placeholder="0"
+                value={filters.minOrdersCount ?? ""}
+                onChange={(e) => updateFilter("minOrdersCount", e.target.value ? parseInt(e.target.value) : undefined)}
+                data-testid="filter-min-orders-count"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block text-muted-foreground">Max</Label>
+              <Input
+                type="number"
+                placeholder="No limit"
+                value={filters.maxOrdersCount ?? ""}
+                onChange={(e) => updateFilter("maxOrdersCount", e.target.value ? parseInt(e.target.value) : undefined)}
+                data-testid="filter-max-orders-count"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2 pt-4 border-t">

@@ -11,7 +11,7 @@ import {
   type SyncLog,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql, and, gte, lte, ilike, or, desc, asc, count } from "drizzle-orm";
+import { eq, sql, and, gte, lte, ilike, or, desc, asc, count, sum, avg } from "drizzle-orm";
 
 export interface IStorage {
   upsertCustomer(customer: InsertCustomer): Promise<Customer>;
@@ -48,6 +48,8 @@ export class DatabaseStorage implements IStorage {
           tags: customer.tags,
           updatedAtShopify: customer.updatedAtShopify,
           lastOrderAt: customer.lastOrderAt,
+          totalSpent: customer.totalSpent,
+          ordersCount: customer.ordersCount,
           updatedAt: new Date(),
         },
       })
@@ -124,6 +126,22 @@ export class DatabaseStorage implements IStorage {
       conditions.push(gte(customers.genderConfidence, filter.minConfidence));
     }
 
+    if (filter.minTotalSpent !== undefined) {
+      conditions.push(gte(customers.totalSpent, filter.minTotalSpent));
+    }
+
+    if (filter.maxTotalSpent !== undefined) {
+      conditions.push(lte(customers.totalSpent, filter.maxTotalSpent));
+    }
+
+    if (filter.minOrdersCount !== undefined) {
+      conditions.push(gte(customers.ordersCount, filter.minOrdersCount));
+    }
+
+    if (filter.maxOrdersCount !== undefined) {
+      conditions.push(lte(customers.ordersCount, filter.maxOrdersCount));
+    }
+
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
     const [countResult] = await db
@@ -148,6 +166,12 @@ export class DatabaseStorage implements IStorage {
         break;
       case "lastOrderAt":
         orderByClause = sortOrder(customers.lastOrderAt);
+        break;
+      case "totalSpent":
+        orderByClause = sortOrder(customers.totalSpent);
+        break;
+      case "ordersCount":
+        orderByClause = sortOrder(customers.ordersCount);
         break;
       case "createdAtShopify":
       default:
@@ -240,6 +264,19 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(count()))
       .limit(10);
 
+    const [ltvResult] = await db
+      .select({
+        totalRevenue: sum(customers.totalSpent),
+        totalOrders: sum(customers.ordersCount),
+        avgLtv: avg(customers.totalSpent),
+      })
+      .from(customers);
+
+    const totalRevenue = parseFloat(ltvResult?.totalRevenue as string) || 0;
+    const totalOrders = parseInt(ltvResult?.totalOrders as string) || 0;
+    const avgLtv = parseFloat(ltvResult?.avgLtv as string) || 0;
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
     return {
       totalCustomers: totalResult?.count || 0,
       maleCount: maleResult?.count || 0,
@@ -248,6 +285,9 @@ export class DatabaseStorage implements IStorage {
       pendingEnrichment: pendingResult?.count || 0,
       customersLast7Days: last7Result?.count || 0,
       customersLast30Days: last30Result?.count || 0,
+      totalRevenue,
+      averageOrderValue: avgOrderValue,
+      averageLtv: avgLtv,
       countryBreakdown: countryBreakdown.map((c) => ({
         country: c.country || "Unknown",
         count: c.count,

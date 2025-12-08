@@ -9,7 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowUpDown, ArrowUp, ArrowDown, Users } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Users, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import type { Customer, CustomerFilter } from "@shared/schema";
 
@@ -66,6 +66,8 @@ export function CustomersTable({
               <TableHead>Country</TableHead>
               <TableHead>Tags</TableHead>
               <TableHead>Gender</TableHead>
+              <TableHead>Total Spent</TableHead>
+              <TableHead>Orders</TableHead>
               <TableHead>Created</TableHead>
               <TableHead>Last Order</TableHead>
             </TableRow>
@@ -73,7 +75,7 @@ export function CustomersTable({
           <TableBody>
             {[...Array(5)].map((_, i) => (
               <TableRow key={i}>
-                {[...Array(8)].map((_, j) => (
+                {[...Array(10)].map((_, j) => (
                   <TableCell key={j}>
                     <Skeleton className="h-4 w-full" />
                   </TableCell>
@@ -146,6 +148,30 @@ export function CustomersTable({
                 variant="ghost"
                 size="sm"
                 className="-ml-3 h-8 text-xs font-medium uppercase tracking-wide"
+                onClick={() => handleSort("totalSpent")}
+                data-testid="sort-total-spent"
+              >
+                Total Spent
+                {getSortIcon("totalSpent")}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-3 h-8 text-xs font-medium uppercase tracking-wide"
+                onClick={() => handleSort("ordersCount")}
+                data-testid="sort-orders-count"
+              >
+                Orders
+                {getSortIcon("ordersCount")}
+              </Button>
+            </TableHead>
+            <TableHead>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-3 h-8 text-xs font-medium uppercase tracking-wide"
                 onClick={() => handleSort("createdAtShopify")}
                 data-testid="sort-created"
               >
@@ -210,6 +236,12 @@ export function CustomersTable({
                     </span>
                   )}
                 </div>
+              </TableCell>
+              <TableCell className="font-medium">
+                ${(customer.totalSpent ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </TableCell>
+              <TableCell className="text-center">
+                {customer.ordersCount ?? 0}
               </TableCell>
               <TableCell className="text-muted-foreground">
                 {customer.createdAtShopify
