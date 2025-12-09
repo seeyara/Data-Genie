@@ -1,7 +1,7 @@
-import { 
-  customers, 
+import {
+  customers,
   syncLogs,
-  type Customer, 
+  type Customer,
   type InsertCustomer,
   type CustomerFilter,
   type CustomerListResponse,
@@ -10,6 +10,7 @@ import {
   type InsertSyncLog,
   type SyncLog,
 } from "@shared/schema";
+import { regionStates } from "@shared/regions";
 import { db } from "./db";
 import { eq, sql, and, gte, lte, ilike, or, desc, asc, count, sum, avg } from "drizzle-orm";
 
@@ -100,6 +101,15 @@ export class DatabaseStorage implements IStorage {
 
     if (filter.city && filter.city.length > 0) {
       conditions.push(or(...filter.city.map((city) => eq(customers.city, city))));
+    }
+
+    if (filter.region) {
+      const statesForRegion = regionStates[filter.region] || [];
+      if (statesForRegion.length > 0) {
+        conditions.push(
+          or(...statesForRegion.map((state) => eq(customers.province, state)))
+        );
+      }
     }
 
     if (filter.province && filter.province.length > 0) {
