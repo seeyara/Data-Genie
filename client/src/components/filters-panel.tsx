@@ -20,6 +20,7 @@ import { CalendarIcon, X, Filter, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { CustomerFilter, Gender } from "@shared/schema";
+import { regionOptions, regionStates, type Region } from "@shared/regions";
 
 interface FiltersPanelProps {
   filters: CustomerFilter;
@@ -74,6 +75,31 @@ export function FiltersPanel({
       : [...current, province];
     updateFilter("province", updated.length > 0 ? updated : undefined);
   };
+
+  const regionSelectValue = filters.region ?? "all";
+
+  const mappedStates = new Set<string>(
+    Object.values(regionStates).flatMap((states) => states)
+  );
+  const otherProvinces = distinctProvinces.filter(
+    (province) => !mappedStates.has(province)
+  );
+
+  const regionsToDisplay = filters.region ? [filters.region] : regionOptions;
+
+  const renderProvinceCheckbox = (province: string) => (
+    <div className="flex items-center space-x-2" key={province}>
+      <Checkbox
+        id={`province-${province}`}
+        checked={filters.province?.includes(province) ?? false}
+        onCheckedChange={() => handleProvinceToggle(province)}
+        data-testid={`filter-province-${province}`}
+      />
+      <Label htmlFor={`province-${province}`} className="text-sm font-normal">
+        {province}
+      </Label>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -238,28 +264,64 @@ export function FiltersPanel({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label className="text-xs font-medium uppercase tracking-wide">
-            State / Province
-          </Label>
-          <div className="space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
-            {distinctProvinces.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No states available</p>
-            ) : (
-              distinctProvinces.map((province) => (
-                <div className="flex items-center space-x-2" key={province}>
-                  <Checkbox
-                    id={`province-${province}`}
-                    checked={filters.province?.includes(province) ?? false}
-                    onCheckedChange={() => handleProvinceToggle(province)}
-                    data-testid={`filter-province-${province}`}
-                  />
-                  <Label htmlFor={`province-${province}`} className="text-sm font-normal">
-                    {province}
-                  </Label>
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium uppercase tracking-wide">
+              Region
+            </Label>
+            <Select
+              value={regionSelectValue}
+              onValueChange={(value) =>
+                updateFilter("region", value === "all" ? undefined : (value as Region))
+              }
+            >
+              <SelectTrigger data-testid="filter-region">
+                <SelectValue placeholder="All regions" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All regions</SelectItem>
+                {regionOptions.map((region) => (
+                  <SelectItem key={region} value={region}>
+                    {region}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs font-medium uppercase tracking-wide">
+              State / Province
+            </Label>
+            <div className="space-y-4">
+              {regionsToDisplay.map((region) => (
+                <div key={region} className="space-y-2">
+                  <div className="text-sm font-medium text-muted-foreground">
+                    {region}
+                  </div>
+                  <div className="space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
+                    {regionStates[region].map((province) =>
+                      renderProvinceCheckbox(province)
+                    )}
+                  </div>
                 </div>
-              ))
-            )}
+              ))}
+
+              {!filters.region && otherProvinces.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-muted-foreground">
+                    Other States
+                  </div>
+                  <div className="space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
+                    {otherProvinces.map((province) => renderProvinceCheckbox(province))}
+                  </div>
+                </div>
+              )}
+
+              {regionsToDisplay.length === 0 && otherProvinces.length === 0 && (
+                <p className="text-sm text-muted-foreground">No states available</p>
+              )}
+            </div>
           </div>
         </div>
 

@@ -8,7 +8,7 @@ import { FiltersPanel } from "@/components/filters-panel";
 import { CustomersTable } from "@/components/customers-table";
 import { PaginationControls } from "@/components/pagination-controls";
 import { SyncStatusPanel } from "@/components/sync-status";
-import { ExportButton } from "@/components/export-button";
+import { ExportButton, type ExportFormat } from "@/components/export-button";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SlidersHorizontal, Store } from "lucide-react";
@@ -24,6 +24,7 @@ const defaultFilters: CustomerFilter = {
   pageSize: 25,
   sortBy: "createdAtShopify",
   sortOrder: "desc",
+  region: undefined,
 };
 
 function buildQueryString(filters: CustomerFilter): string {
@@ -43,6 +44,7 @@ function buildQueryString(filters: CustomerFilter): string {
   if (filters.lastOrderFrom) params.set("lastOrderFrom", filters.lastOrderFrom);
   if (filters.lastOrderTo) params.set("lastOrderTo", filters.lastOrderTo);
   if (filters.tag) params.set("tag", filters.tag);
+  if (filters.region) params.set("region", filters.region);
   if (filters.minTotalSpent !== undefined)
     params.set("minTotalSpent", String(filters.minTotalSpent));
   if (filters.maxTotalSpent !== undefined)
@@ -145,11 +147,11 @@ export default function Dashboard() {
     }));
   }, []);
 
-  const handleExport = useCallback(async () => {
+  const handleExport = useCallback(async (format: ExportFormat) => {
     setIsExporting(true);
     try {
       const qs = buildQueryString({ ...appliedFilters, page: 1, pageSize: 10000 });
-      const res = await fetch(`/api/customers/export?${qs}`);
+      const res = await fetch(`/api/customers/export?${qs}&format=${format}`);
       if (!res.ok) throw new Error("Export failed");
       
       const blob = await res.blob();

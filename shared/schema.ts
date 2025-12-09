@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, bigint, timestamp, real, integer } from "drizzle-orm/pg-core";
 import { z } from "zod";
+import { regionOptions, type Region } from "./regions";
 
 export const genderEnum = ["male", "female", "unknown"] as const;
 export type Gender = typeof genderEnum[number];
@@ -58,6 +59,7 @@ export const customerFilterSchema = z.object({
   lastOrderTo: z.string().optional(),
   city: z.array(z.string()).optional(),
   province: z.array(z.string()).optional(),
+  region: z.enum(regionOptions).optional(),
   tag: z.string().optional(),
   minTotalSpent: z.number().min(0).optional(),
   maxTotalSpent: z.number().min(0).optional(),
@@ -70,6 +72,7 @@ export const customerFilterSchema = z.object({
 });
 
 export type CustomerFilter = z.infer<typeof customerFilterSchema>;
+export type { Region };
 
 export interface CustomerListResponse {
   data: Customer[];

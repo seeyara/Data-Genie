@@ -45,6 +45,7 @@ export async function registerRoutes(
         lastOrderTo: req.query.lastOrderTo as string | undefined,
         city: cityArray,
         province: provinceArray,
+        region: req.query.region as any,
         tag: req.query.tag as string | undefined,
         minTotalSpent: req.query.minTotalSpent
           ? parseFloat(req.query.minTotalSpent as string)
@@ -103,6 +104,7 @@ export async function registerRoutes(
         lastOrderTo: req.query.lastOrderTo as string | undefined,
         city: cityArray,
         province: provinceArray,
+        region: req.query.region as any,
         tag: req.query.tag as string | undefined,
         minTotalSpent: req.query.minTotalSpent
           ? parseFloat(req.query.minTotalSpent as string)
@@ -121,30 +123,89 @@ export async function registerRoutes(
       });
 
       const result = await storage.getCustomers(filter);
+      const exportFormat =
+        typeof req.query.format === "string"
+          ? req.query.format.toLowerCase()
+          : undefined;
 
-      const csvData = result.data.map((customer) => ({
-        name: [customer.firstName, customer.lastName].filter(Boolean).join(" "),
-        email: customer.email || "",
-        phone: customer.phone || "",
-        city: customer.city || "",
-        country: customer.country || "",
-        tags: customer.tags || "",
-        gender_inferred: customer.genderInferred || "",
-        gender_confidence: customer.genderConfidence?.toFixed(2) || "",
-        total_spent: customer.totalSpent?.toFixed(2) || "0.00",
-        orders_count: customer.ordersCount || 0,
-        created_at_shopify: customer.createdAtShopify?.toISOString() || "",
-        last_order_at: customer.lastOrderAt?.toISOString() || "",
-      }));
+      if (exportFormat === "interakt") {
+        const fields = [
+          "Name",
+          "Full Phone Number",
+          "Phone Number",
+          "Country Code",
+          "Email",
+          "Appointment Time",
+          "WhatsApp Opted",
+        ];
 
-      const csv = Papa.unparse(csvData);
+        const phoneForInterakt = (phone: string | null) => {
+          const digits = (phone || "").replace(/\D/g, "");
+          if (!digits) return { full: "", local: "" };
 
-      res.setHeader("Content-Type", "text/csv");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="customers-export-${new Date().toISOString().split("T")[0]}.csv"`
-      );
-      res.send(csv);
+          const local = digits.startsWith("91")
+            ? digits.slice(2)
+            : digits.length > 10
+            ? digits.slice(-10)
+            : digits;
+
+          const normalizedLocal = local || "";
+          const full = normalizedLocal ? `91${normalizedLocal}` : "";
+          return { full, local: normalizedLocal };
+        };
+
+        const csvRows = result.data.map((customer) => {
+          const name = [customer.firstName, customer.lastName]
+            .filter(Boolean)
+            .join(" ");
+          const phone = phoneForInterakt(customer.phone || "");
+
+          return [
+            name,
+            phone.full,
+            phone.local,
+            "91",
+            "",
+            "",
+            "true",
+          ];
+        });
+
+        const csv = Papa.unparse({ fields, data: csvRows });
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="customers-interakt-export-${new Date()
+            .toISOString()
+            .split("T")[0]}.csv"`
+        );
+        res.send(csv);
+      } else {
+        const csvData = result.data.map((customer) => ({
+          name: [customer.firstName, customer.lastName].filter(Boolean).join(" "),
+          email: customer.email || "",
+          phone: customer.phone || "",
+          city: customer.city || "",
+          country: customer.country || "",
+          tags: customer.tags || "",
+          gender_inferred: customer.genderInferred || "",
+          gender_confidence: customer.genderConfidence?.toFixed(2) || "",
+          total_spent: customer.totalSpent?.toFixed(2) || "0.00",
+          orders_count: customer.ordersCount || 0,
+          created_at_shopify: customer.createdAtShopify?.toISOString() || "",
+          last_order_at: customer.lastOrderAt?.toISOString() || "",
+        }));
+
+        const csv = Papa.unparse(csvData);
+
+        res.setHeader("Content-Type", "text/csv");
+        res.setHeader(
+          "Content-Disposition",
+          `attachment; filename="customers-export-${new Date().toISOString().split("T")[0]}.csv"`
+        );
+        res.send(csv);
+      }
     } catch (error) {
       log(`Error exporting customers: ${error}`, "api");
       res.status(500).json({ error: "Export failed" });
