@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -29,6 +28,7 @@ interface FiltersPanelProps {
   onClear: () => void;
   distinctTags: string[];
   distinctCities: string[];
+  distinctProvinces: string[];
   isLoading?: boolean;
 }
 
@@ -39,6 +39,7 @@ export function FiltersPanel({
   onClear,
   distinctTags,
   distinctCities,
+  distinctProvinces,
   isLoading,
 }: FiltersPanelProps) {
   const updateFilter = <K extends keyof CustomerFilter>(
@@ -64,6 +65,14 @@ export function FiltersPanel({
       ? current.filter((c) => c !== city)
       : [...current, city];
     updateFilter("city", updated.length > 0 ? updated : undefined);
+  };
+
+  const handleProvinceToggle = (province: string) => {
+    const current = filters.province || [];
+    const updated = current.includes(province)
+      ? current.filter((p) => p !== province)
+      : [...current, province];
+    updateFilter("province", updated.length > 0 ? updated : undefined);
   };
 
   return (
@@ -231,6 +240,31 @@ export function FiltersPanel({
 
         <div className="space-y-2">
           <Label className="text-xs font-medium uppercase tracking-wide">
+            State / Province
+          </Label>
+          <div className="space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
+            {distinctProvinces.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No states available</p>
+            ) : (
+              distinctProvinces.map((province) => (
+                <div className="flex items-center space-x-2" key={province}>
+                  <Checkbox
+                    id={`province-${province}`}
+                    checked={filters.province?.includes(province) ?? false}
+                    onCheckedChange={() => handleProvinceToggle(province)}
+                    data-testid={`filter-province-${province}`}
+                  />
+                  <Label htmlFor={`province-${province}`} className="text-sm font-normal">
+                    {province}
+                  </Label>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-xs font-medium uppercase tracking-wide">
             City
           </Label>
           <div className="space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
@@ -276,44 +310,6 @@ export function FiltersPanel({
               ))}
             </SelectContent>
           </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs font-medium uppercase tracking-wide">
-            Email Contains
-          </Label>
-          <Input
-            placeholder="Search by email..."
-            value={filters.emailContains || ""}
-            onChange={(e) => updateFilter("emailContains", e.target.value || undefined)}
-            data-testid="filter-email-contains"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs font-medium uppercase tracking-wide">
-            Name Contains
-          </Label>
-          <Input
-            placeholder="Search by name..."
-            value={filters.nameContains || ""}
-            onChange={(e) => updateFilter("nameContains", e.target.value || undefined)}
-            data-testid="filter-name-contains"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-xs font-medium uppercase tracking-wide">
-            Min Confidence: {Math.round((filters.minConfidence || 0) * 100)}%
-          </Label>
-          <Slider
-            value={[filters.minConfidence || 0]}
-            onValueChange={([value]) => updateFilter("minConfidence", value || undefined)}
-            max={1}
-            step={0.05}
-            className="w-full"
-            data-testid="filter-min-confidence"
-          />
         </div>
 
         <div className="space-y-2">

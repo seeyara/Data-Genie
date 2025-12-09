@@ -10,9 +10,8 @@ import { PaginationControls } from "@/components/pagination-controls";
 import { SyncStatusPanel } from "@/components/sync-status";
 import { ExportButton } from "@/components/export-button";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Loader2, RefreshCw, SlidersHorizontal, Sparkles, Store } from "lucide-react";
+import { SlidersHorizontal, Store } from "lucide-react";
 import type { 
   CustomerFilter, 
   CustomerListResponse, 
@@ -33,6 +32,9 @@ function buildQueryString(filters: CustomerFilter): string {
   if (filters.genderInferred?.length) {
     filters.genderInferred.forEach((g) => params.append("genderInferred", g));
   }
+  if (filters.province?.length) {
+    filters.province.forEach((province) => params.append("province", province));
+  }
   if (filters.city?.length) {
     filters.city.forEach((city) => params.append("city", city));
   }
@@ -41,9 +43,14 @@ function buildQueryString(filters: CustomerFilter): string {
   if (filters.lastOrderFrom) params.set("lastOrderFrom", filters.lastOrderFrom);
   if (filters.lastOrderTo) params.set("lastOrderTo", filters.lastOrderTo);
   if (filters.tag) params.set("tag", filters.tag);
-  if (filters.emailContains) params.set("emailContains", filters.emailContains);
-  if (filters.nameContains) params.set("nameContains", filters.nameContains);
-  if (filters.minConfidence) params.set("minConfidence", String(filters.minConfidence));
+  if (filters.minTotalSpent !== undefined)
+    params.set("minTotalSpent", String(filters.minTotalSpent));
+  if (filters.maxTotalSpent !== undefined)
+    params.set("maxTotalSpent", String(filters.maxTotalSpent));
+  if (filters.minOrdersCount !== undefined)
+    params.set("minOrdersCount", String(filters.minOrdersCount));
+  if (filters.maxOrdersCount !== undefined)
+    params.set("maxOrdersCount", String(filters.maxOrdersCount));
   if (filters.sortBy) params.set("sortBy", filters.sortBy);
   if (filters.sortOrder) params.set("sortOrder", filters.sortOrder);
   params.set("page", String(filters.page));
@@ -69,8 +76,6 @@ export default function Dashboard() {
     queryKey: ["/api/stats/summary"],
   });
 
-  const pendingEnrichment = stats?.pendingEnrichment ?? 0;
-
   const { data: syncStatus, isLoading: syncStatusLoading } = useQuery<SyncStatus>({
     queryKey: ["/api/sync/status"],
   });
@@ -78,6 +83,7 @@ export default function Dashboard() {
   const { data: filterOptions } = useQuery<{
     tags: string[];
     cities: string[];
+    provinces: string[];
   }>({
     queryKey: ["/api/customers/filter-options"],
   });
@@ -108,55 +114,6 @@ export default function Dashboard() {
     },
   });
 
-  const enrichmentMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/enrich");
-      return res.json() as Promise<{ enrichedCount: number }>;
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Enrichment complete",
-        description: data.enrichedCount
-          ? `${data.enrichedCount} customers processed.`
-          : "No pending customers needed enrichment.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/summary"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers?" + queryString] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Enrichment failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const resetEnrichmentMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/enrich/reset");
-      return res.json() as Promise<{ customersMarkedPending: number }>;
-    },
-    onSuccess: (data) => {
-      toast({
-        title: "Gender predictions reset",
-        description: data.customersMarkedPending
-          ? `${data.customersMarkedPending} customers marked for re-inference.`
-          : "No customers needed updating.",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats/summary"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers?" + queryString] });
-      queryClient.invalidateQueries({ queryKey: ["/api/customers/filter-options"] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Reset failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleApplyFilters = useCallback(() => {
     setAppliedFilters({ ...filters, page: 1 });
     setMobileFiltersOpen(false);
@@ -167,23 +124,6 @@ export default function Dashboard() {
     setFilters(cleared);
     setAppliedFilters(cleared);
   }, []);
-
-  const handleResetAndEnrich = useCallback(async () => {
-    try {
-      await resetEnrichmentMutation.mutateAsync();
-      if (!enrichmentMutation.isPending) {
-        enrichmentMutation.mutate();
-      }
-    } catch (error) {
-      if (error instanceof Error) {
-        toast({
-          title: "Reset failed",
-          description: error.message,
-          variant: "destructive",
-        });
-      }
-    }
-  }, [enrichmentMutation, resetEnrichmentMutation, toast]);
 
   const handlePageChange = useCallback((page: number) => {
     setAppliedFilters((prev) => ({ ...prev, page }));
@@ -245,6 +185,7 @@ export default function Dashboard() {
       onClear={handleClearFilters}
       distinctTags={filterOptions?.tags || []}
       distinctCities={filterOptions?.cities || []}
+      distinctProvinces={filterOptions?.provinces || []}
       isLoading={customersLoading}
     />
   );
@@ -306,58 +247,8 @@ export default function Dashboard() {
             <div>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-                  <Button
-                    variant="secondary"
-                    onClick={() => enrichmentMutation.mutate()}
-                    disabled={
-                      enrichmentMutation.isPending ||
-                      pendingEnrichment === 0 ||
-                      statsLoading
-                    }
-                    data-testid="button-enrich-pending"
-                  >
-                    {enrichmentMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Running enrichment...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Enrich pending customers
-                      </>
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={handleResetAndEnrich}
-                    disabled={
-                      resetEnrichmentMutation.isPending ||
-                      enrichmentMutation.isPending ||
-                      statsLoading
-                    }
-                    data-testid="button-reset-enrichment"
-                  >
-                    {resetEnrichmentMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Resetting predictions...
-                      </>
-                    ) : (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Reset & re-run inference
-                      </>
-                    )}
-                  </Button>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Badge variant="outline">{pendingEnrichment} pending</Badge>
-                    <span>
-                      {pendingEnrichment > 0
-                        ? "Trigger AI gender inference for customers still waiting on enrichment."
-                        : "All customers are enriched."
-                      }
-                    </span>
+                  <div className="text-sm text-muted-foreground">
+                    Gender prediction now runs automatically for new customers after each sync.
                   </div>
                 </div>
 

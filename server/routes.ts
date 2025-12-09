@@ -30,6 +30,13 @@ export async function registerRoutes(
         ? [String(city)]
         : undefined;
 
+      const province = req.query.province;
+      const provinceArray = Array.isArray(province)
+        ? province.map(String)
+        : province
+        ? [String(province)]
+        : undefined;
+
       const filter = customerFilterSchema.parse({
         genderInferred: genderArray,
         createdFrom: req.query.createdFrom as string | undefined,
@@ -37,12 +44,8 @@ export async function registerRoutes(
         lastOrderFrom: req.query.lastOrderFrom as string | undefined,
         lastOrderTo: req.query.lastOrderTo as string | undefined,
         city: cityArray,
+        province: provinceArray,
         tag: req.query.tag as string | undefined,
-        emailContains: req.query.emailContains as string | undefined,
-        nameContains: req.query.nameContains as string | undefined,
-        minConfidence: req.query.minConfidence
-          ? parseFloat(req.query.minConfidence as string)
-          : undefined,
         minTotalSpent: req.query.minTotalSpent
           ? parseFloat(req.query.minTotalSpent as string)
           : undefined,
@@ -85,6 +88,13 @@ export async function registerRoutes(
         ? [String(city)]
         : undefined;
 
+      const province = req.query.province;
+      const provinceArray = Array.isArray(province)
+        ? province.map(String)
+        : province
+        ? [String(province)]
+        : undefined;
+
       const filter = customerFilterSchema.parse({
         genderInferred: genderArray,
         createdFrom: req.query.createdFrom as string | undefined,
@@ -92,12 +102,8 @@ export async function registerRoutes(
         lastOrderFrom: req.query.lastOrderFrom as string | undefined,
         lastOrderTo: req.query.lastOrderTo as string | undefined,
         city: cityArray,
+        province: provinceArray,
         tag: req.query.tag as string | undefined,
-        emailContains: req.query.emailContains as string | undefined,
-        nameContains: req.query.nameContains as string | undefined,
-        minConfidence: req.query.minConfidence
-          ? parseFloat(req.query.minConfidence as string)
-          : undefined,
         minTotalSpent: req.query.minTotalSpent
           ? parseFloat(req.query.minTotalSpent as string)
           : undefined,
@@ -147,12 +153,13 @@ export async function registerRoutes(
 
   app.get("/api/customers/filter-options", async (_req: Request, res: Response) => {
     try {
-      const [tags, cities] = await Promise.all([
+      const [tags, cities, provinces] = await Promise.all([
         storage.getDistinctTags(),
         storage.getDistinctCities(),
+        storage.getDistinctProvinces(),
       ]);
 
-      res.json({ tags, cities });
+      res.json({ tags, cities, provinces });
     } catch (error) {
       log(`Error fetching filter options: ${error}`, "api");
       res.status(500).json({ error: "Failed to fetch filter options" });
@@ -180,14 +187,21 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/sync/customers", async (_req: Request, res: Response) => {
+  app.post("/api/admin/sync/customers", async (req: Request, res: Response) => {
     try {
       if (isSyncInProgress()) {
         res.status(409).json({ error: "Sync already in progress" });
         return;
       }
 
-      syncCustomers(false).catch((error) => {
+      const { startDate } = req.body || {};
+      const parsedStartDate = startDate ? new Date(startDate) : undefined;
+      if (startDate && isNaN(parsedStartDate?.getTime() ?? NaN)) {
+        res.status(400).json({ error: "Invalid startDate provided" });
+        return;
+      }
+
+      syncCustomers({ incremental: true, startDate: parsedStartDate }).catch((error) => {
         log(`Background sync failed: ${error}`, "api");
       });
 
