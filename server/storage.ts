@@ -23,6 +23,7 @@ export interface IStorage {
   getSyncStatus(): Promise<SyncStatus>;
   getDistinctTags(): Promise<string[]>;
   getDistinctCities(): Promise<string[]>;
+  getDistinctProvinces(): Promise<string[]>;
   resetAllEnrichments(): Promise<number>;
   createSyncLog(log: InsertSyncLog): Promise<SyncLog>;
   updateSyncLog(id: number, updates: Partial<SyncLog>): Promise<void>;
@@ -101,25 +102,14 @@ export class DatabaseStorage implements IStorage {
       conditions.push(or(...filter.city.map((city) => eq(customers.city, city))));
     }
 
-    if (filter.tag) {
-      conditions.push(ilike(customers.tags, `%${filter.tag}%`));
-    }
-
-    if (filter.emailContains) {
-      conditions.push(ilike(customers.email, `%${filter.emailContains}%`));
-    }
-
-    if (filter.nameContains) {
+    if (filter.province && filter.province.length > 0) {
       conditions.push(
-        or(
-          ilike(customers.firstName, `%${filter.nameContains}%`),
-          ilike(customers.lastName, `%${filter.nameContains}%`)
-        )
+        or(...filter.province.map((province) => eq(customers.province, province)))
       );
     }
 
-    if (filter.minConfidence !== undefined && filter.minConfidence > 0) {
-      conditions.push(gte(customers.genderConfidence, filter.minConfidence));
+    if (filter.tag) {
+      conditions.push(ilike(customers.tags, `%${filter.tag}%`));
     }
 
     if (filter.minTotalSpent !== undefined) {
@@ -332,6 +322,16 @@ export class DatabaseStorage implements IStorage {
       .orderBy(customers.city);
 
     return results.map((r) => r.city!).filter(Boolean);
+  }
+
+  async getDistinctProvinces(): Promise<string[]> {
+    const results = await db
+      .selectDistinct({ province: customers.province })
+      .from(customers)
+      .where(sql`${customers.province} IS NOT NULL AND ${customers.province} != ''`)
+      .orderBy(customers.province);
+
+    return results.map((r) => r.province!).filter(Boolean);
   }
 
   async resetAllEnrichments(): Promise<number> {

@@ -5,9 +5,21 @@ import { enrichPendingCustomers } from "./enrichment";
 import { log } from "./index";
 import type { InsertCustomer } from "@shared/schema";
 
+const INCREMENTAL_SYNC_START_DATE = process.env.INCREMENTAL_SYNC_START_DATE
+  ? new Date(process.env.INCREMENTAL_SYNC_START_DATE)
+  : undefined;
+
 let isSyncing = false;
 
-export async function syncCustomers(incremental = true): Promise<{
+interface SyncCustomersOptions {
+  incremental?: boolean;
+  startDate?: Date;
+}
+
+export async function syncCustomers({
+  incremental = true,
+  startDate,
+}: SyncCustomersOptions = {}): Promise<{
   processed: number;
   created: number;
   updated: number;
@@ -33,11 +45,23 @@ export async function syncCustomers(incremental = true): Promise<{
 
     let updatedAtMin: Date | undefined;
     if (incremental) {
-      const latestLog = await storage.getLatestSyncLog();
-      if (latestLog?.completedAt) {
-        updatedAtMin = new Date(latestLog.completedAt);
+      const baseDate = startDate || INCREMENTAL_SYNC_START_DATE;
+      if (baseDate) {
+        updatedAtMin = new Date(baseDate);
+      } else {
+        const latestLog = await storage.getLatestSyncLog();
+        if (latestLog?.completedAt) {
+          updatedAtMin = new Date(latestLog.completedAt);
+        }
+      }
+
+      if (updatedAtMin) {
         updatedAtMin.setMinutes(updatedAtMin.getMinutes() - 5);
       }
+    }
+
+    if (updatedAtMin) {
+      log(`Incremental sync starting from ${updatedAtMin.toISOString()}`, "sync");
     }
 
     const onBatch = async (customers: TransformedCustomer[]) => {
@@ -120,10 +144,10 @@ export async function syncCustomers(incremental = true): Promise<{
 }
 
 export function startSyncSchedule(): void {
-  cron.schedule("*/15 * * * *", async () => {
-    log("Running scheduled customer sync", "cron");
+  cron.schedule("0 2 * * *", async () => {
+    log("Running daily incremental customer sync", "cron");
     try {
-      await syncCustomers(true);
+      await syncCustomers({ incremental: true });
     } catch (error) {
       log(`Scheduled sync failed: ${error}`, "cron");
     }

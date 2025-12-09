@@ -1,16 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Users,
-  UserCheck,
-  UserX,
-  UserMinus,
-  Clock,
-  CalendarDays,
-  IndianRupee,
-  ShoppingCart,
-  TrendingUp,
-} from "lucide-react";
+import { Users, UserCheck, UserX, UserMinus, Clock, CalendarDays } from "lucide-react";
 import type { StatsSummary } from "@shared/schema";
 
 interface StatsCardsProps {
@@ -33,8 +23,8 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
             </Card>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => (
+        <div className="grid grid-cols-2 gap-4">
+          {[...Array(2)].map((_, i) => (
             <Card key={i}>
               <CardContent className="p-6">
                 <Skeleton className="h-4 w-24 mb-3" />
@@ -98,51 +88,6 @@ export function StatsCards({ stats, isLoading }: StatsCardsProps) {
             </CardContent>
           </Card>
         ))}
-      </div>
-      
-      <div className="grid grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                TOTAL REVENUE
-              </span>
-              <IndianRupee className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-3xl font-bold" data-testid="stat-total-revenue">
-              ₹{(stats?.totalRevenue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">from all customers</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                AVG ORDER VALUE
-              </span>
-              <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-3xl font-bold" data-testid="stat-avg-order-value">
-              ₹{(stats?.averageOrderValue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">per order</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                AVG CUSTOMER LTV
-              </span>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="text-3xl font-bold" data-testid="stat-avg-ltv">
-              ₹{(stats?.averageLtv ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">per customer</p>
-          </CardContent>
-        </Card>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
