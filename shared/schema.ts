@@ -71,6 +71,10 @@ export const customerFilterSchema = z.object({
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
 
+export const customerExportFilterSchema = customerFilterSchema.extend({
+  pageSize: z.number().min(1).default(10000),
+});
+
 export type CustomerFilter = z.infer<typeof customerFilterSchema>;
 export type { Region };
 

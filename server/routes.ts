@@ -1,7 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { customerFilterSchema } from "@shared/schema";
+import { customerExportFilterSchema, customerFilterSchema } from "@shared/schema";
 import { syncCustomers, startSyncSchedule, isSyncInProgress } from "./syncJob";
 import { verifyWebhookSignature } from "./shopifyClient";
 import { enrichAllPendingCustomers } from "./enrichment";
@@ -96,7 +96,7 @@ export async function registerRoutes(
         ? [String(province)]
         : undefined;
 
-      const filter = customerFilterSchema.parse({
+      const filter = customerExportFilterSchema.parse({
         genderInferred: genderArray,
         createdFrom: req.query.createdFrom as string | undefined,
         createdTo: req.query.createdTo as string | undefined,
