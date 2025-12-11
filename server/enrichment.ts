@@ -8,12 +8,12 @@ import { upsertCustomerMetafield } from "./shopifyClient";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const WRITE_BACK_TO_SHOPIFY = process.env.WRITE_BACK_TO_SHOPIFY === "true";
 
-interface GenderInferenceResult {
+export interface GenderInferenceResult {
   gender: "male" | "female" | "unknown";
   confidence: number;
 }
 
-async function inferGender(
+export async function inferGender(
   firstName: string | null,
   lastName: string | null,
   email: string | null,
