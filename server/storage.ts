@@ -37,6 +37,25 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  private exportLogsReady?: Promise<void>;
+
+  private ensureExportLogsTable() {
+    if (!this.exportLogsReady) {
+      this.exportLogsReady = db
+        .execute(sql`
+          CREATE TABLE IF NOT EXISTS export_logs (
+            id serial PRIMARY KEY,
+            format text NOT NULL,
+            exported_count integer DEFAULT 0 NOT NULL,
+            created_at timestamp DEFAULT now() NOT NULL
+          )
+        `)
+        .then(() => undefined);
+    }
+
+    return this.exportLogsReady;
+  }
+
   async upsertCustomer(customer: InsertCustomer): Promise<Customer> {
     const [result] = await db
       .insert(customers)
@@ -392,10 +411,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async recordExport(format: string, exportedCount: number): Promise<void> {
+    await this.ensureExportLogsTable();
     await db.insert(exportLogs).values({ format, exportedCount });
   }
 
   async getExportActivity(days = 30): Promise<ExportActivityEntry[]> {
+    await this.ensureExportLogsTable();
     const since = new Date();
     since.setDate(since.getDate() - days + 1);
 
