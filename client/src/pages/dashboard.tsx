@@ -9,14 +9,16 @@ import { CustomersTable } from "@/components/customers-table";
 import { PaginationControls } from "@/components/pagination-controls";
 import { SyncStatusPanel } from "@/components/sync-status";
 import { ExportButton, type ExportFormat } from "@/components/export-button";
+import { ExportActivityCalendar } from "@/components/export-calendar";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { SlidersHorizontal, Store } from "lucide-react";
-import type { 
-  CustomerFilter, 
-  CustomerListResponse, 
-  StatsSummary, 
-  SyncStatus 
+import type {
+  CustomerFilter,
+  CustomerListResponse,
+  StatsSummary,
+  SyncStatus,
+  ExportActivityEntry,
 } from "@shared/schema";
 
 const defaultFilters: CustomerFilter = {
@@ -80,6 +82,12 @@ export default function Dashboard() {
 
   const { data: syncStatus, isLoading: syncStatusLoading } = useQuery<SyncStatus>({
     queryKey: ["/api/sync/status"],
+  });
+
+  const { data: exportActivity, isLoading: exportActivityLoading } = useQuery<
+    ExportActivityEntry[]
+  >({
+    queryKey: ["/api/exports/activity"],
   });
 
   const { data: filterOptions } = useQuery<{
@@ -230,6 +238,11 @@ export default function Dashboard() {
           </div>
 
           <div className="space-y-6">
+            <ExportActivityCalendar
+              activity={exportActivity}
+              isLoading={exportActivityLoading}
+            />
+
             <StatsCards stats={stats} isLoading={statsLoading} />
 
             <div className="lg:hidden">

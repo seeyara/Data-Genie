@@ -36,6 +36,16 @@ export const customers = pgTable("customers", {
 export type Customer = typeof customers.$inferSelect;
 export type InsertCustomer = typeof customers.$inferInsert;
 
+export const exportLogs = pgTable("export_logs", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  format: text("format").notNull(),
+  exportedCount: integer("exported_count").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export type ExportLog = typeof exportLogs.$inferSelect;
+export type InsertExportLog = typeof exportLogs.$inferInsert;
+
 export const syncLogs = pgTable("sync_logs", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
   syncType: text("sync_type").notNull(),
@@ -106,6 +116,12 @@ export interface SyncStatus {
   lastSync: string | null;
   isRunning: boolean;
   customersCount: number;
+}
+
+export interface ExportActivityEntry {
+  date: string;
+  total: number;
+  byFormat: { format: string; count: number }[];
 }
 
 export const users = pgTable("users", {

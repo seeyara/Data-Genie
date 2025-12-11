@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { storage } from "./storage";
 import { fetchAllCustomers, type TransformedCustomer } from "./shopifyClient";
-import { enrichPendingCustomers } from "./enrichment";
+import { enrichPendingCustomers, inferGender } from "./enrichment";
 import { log } from "./index";
 import type { InsertCustomer } from "@shared/schema";
 
@@ -49,9 +49,14 @@ export async function syncCustomers({
       if (baseDate) {
         updatedAtMin = new Date(baseDate);
       } else {
-        const latestLog = await storage.getLatestSyncLog();
-        if (latestLog?.completedAt) {
-          updatedAtMin = new Date(latestLog.completedAt);
+        const latestCustomerDate = await storage.getLatestCustomerUpdatedAt();
+        if (latestCustomerDate) {
+          updatedAtMin = new Date(latestCustomerDate);
+        } else {
+          const latestLog = await storage.getLatestSyncLog();
+          if (latestLog?.completedAt) {
+            updatedAtMin = new Date(latestLog.completedAt);
+          }
         }
       }
 
@@ -67,7 +72,19 @@ export async function syncCustomers({
     const onBatch = async (customers: TransformedCustomer[]) => {
       for (const customer of customers) {
         const existing = await storage.getCustomerByShopifyId(customer.shopifyCustomerId);
-        
+
+        const shouldInfer = !existing || existing.enrichmentStatus !== "complete";
+        const genderInference = shouldInfer
+          ? await inferGender(
+              customer.firstName,
+              customer.lastName,
+              customer.email,
+              customer.country,
+            )
+          : undefined;
+
+        const shouldPersistInference = (genderInference?.gender || "unknown") !== "unknown";
+
         const insertData: InsertCustomer = {
           shopifyCustomerId: customer.shopifyCustomerId,
           email: customer.email,
@@ -83,9 +100,16 @@ export async function syncCustomers({
           updatedAtShopify: customer.updatedAtShopify,
           totalSpent: customer.totalSpent,
           ordersCount: customer.ordersCount,
-          enrichmentStatus: existing?.enrichmentStatus || "pending",
-          genderInferred: existing?.genderInferred,
-          genderConfidence: existing?.genderConfidence,
+          enrichmentStatus:
+            shouldPersistInference
+              ? "complete"
+              : existing?.enrichmentStatus || "pending",
+          genderInferred: shouldPersistInference
+            ? genderInference?.gender
+            : existing?.genderInferred,
+          genderConfidence: shouldPersistInference
+            ? genderInference?.confidence
+            : existing?.genderConfidence,
         };
 
         await storage.upsertCustomer(insertData);

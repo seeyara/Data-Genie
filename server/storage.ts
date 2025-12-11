@@ -1,6 +1,7 @@
 import {
   customers,
   syncLogs,
+  exportLogs,
   type Customer,
   type InsertCustomer,
   type CustomerFilter,
@@ -9,6 +10,7 @@ import {
   type SyncStatus,
   type InsertSyncLog,
   type SyncLog,
+  type ExportActivityEntry,
 } from "@shared/schema";
 import { regionStates } from "@shared/regions";
 import { db } from "./db";
@@ -29,6 +31,9 @@ export interface IStorage {
   createSyncLog(log: InsertSyncLog): Promise<SyncLog>;
   updateSyncLog(id: number, updates: Partial<SyncLog>): Promise<void>;
   getLatestSyncLog(): Promise<SyncLog | undefined>;
+  getLatestCustomerUpdatedAt(): Promise<Date | undefined>;
+  recordExport(format: string, exportedCount: number): Promise<void>;
+  getExportActivity(days?: number): Promise<ExportActivityEntry[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -374,6 +379,52 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(syncLogs.startedAt))
       .limit(1);
     return result;
+  }
+
+  async getLatestCustomerUpdatedAt(): Promise<Date | undefined> {
+    const [result] = await db
+      .select({ updatedAtShopify: customers.updatedAtShopify })
+      .from(customers)
+      .orderBy(desc(customers.updatedAtShopify))
+      .limit(1);
+
+    return result?.updatedAtShopify || undefined;
+  }
+
+  async recordExport(format: string, exportedCount: number): Promise<void> {
+    await db.insert(exportLogs).values({ format, exportedCount });
+  }
+
+  async getExportActivity(days = 30): Promise<ExportActivityEntry[]> {
+    const since = new Date();
+    since.setDate(since.getDate() - days + 1);
+
+    const rows = await db
+      .select({
+        date: sql`date(${exportLogs.createdAt})`.as("date"),
+        format: exportLogs.format,
+        count: sql<number>`sum(${exportLogs.exportedCount})`.as("count"),
+      })
+      .from(exportLogs)
+      .where(gte(exportLogs.createdAt, since))
+      .groupBy(sql`date(${exportLogs.createdAt})`, exportLogs.format)
+      .orderBy(sql`date(${exportLogs.createdAt})`);
+
+    const grouped = new Map<string, ExportActivityEntry>();
+
+    for (const row of rows) {
+      const dateValue = row.date instanceof Date ? row.date : new Date(row.date as string);
+      const dateKey = dateValue.toISOString().split("T")[0];
+      if (!grouped.has(dateKey)) {
+        grouped.set(dateKey, { date: dateKey, total: 0, byFormat: [] });
+      }
+
+      const entry = grouped.get(dateKey)!;
+      entry.total += Number(row.count) || 0;
+      entry.byFormat.push({ format: row.format, count: Number(row.count) || 0 });
+    }
+
+    return Array.from(grouped.values());
   }
 }
 

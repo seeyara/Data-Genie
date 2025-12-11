@@ -128,6 +128,8 @@ export async function registerRoutes(
           ? req.query.format.toLowerCase()
           : undefined;
 
+      const exportedCount = result.data.length;
+
       if (exportFormat === "interakt") {
         const fields = [
           "Name",
@@ -173,6 +175,12 @@ export async function registerRoutes(
 
         const csv = Papa.unparse({ fields, data: csvRows });
 
+        try {
+          await storage.recordExport("interakt", exportedCount);
+        } catch (logError) {
+          log(`Failed to record interakt export: ${logError}`, "api");
+        }
+
         res.setHeader("Content-Type", "text/csv");
         res.setHeader(
           "Content-Disposition",
@@ -198,6 +206,12 @@ export async function registerRoutes(
         }));
 
         const csv = Papa.unparse(csvData);
+
+        try {
+          await storage.recordExport(exportFormat || "csv", exportedCount);
+        } catch (logError) {
+          log(`Failed to record export: ${logError}`, "api");
+        }
 
         res.setHeader("Content-Type", "text/csv");
         res.setHeader(
@@ -234,6 +248,17 @@ export async function registerRoutes(
     } catch (error) {
       log(`Error fetching stats: ${error}`, "api");
       res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/exports/activity", async (req: Request, res: Response) => {
+    try {
+      const days = req.query.days ? parseInt(req.query.days as string, 10) : 30;
+      const activity = await storage.getExportActivity(Number.isFinite(days) ? days : 30);
+      res.json(activity);
+    } catch (error) {
+      log(`Error fetching export activity: ${error}`, "api");
+      res.status(500).json({ error: "Failed to fetch export activity" });
     }
   });
 

@@ -87,6 +87,23 @@ export function FiltersPanel({
 
   const regionsToDisplay = filters.region ? [filters.region] : regionOptions;
 
+  const handleRegionSelectAll = (region: Region) => {
+    const statesForRegion = regionStates[region] || [];
+    const current = new Set(filters.province || []);
+    const allSelected = statesForRegion.every((state) => current.has(state));
+
+    let updated: string[];
+    if (allSelected) {
+      updated = (filters.province || []).filter(
+        (province) => !statesForRegion.includes(province)
+      );
+    } else {
+      updated = Array.from(new Set([...current, ...statesForRegion]));
+    }
+
+    updateFilter("province", updated.length > 0 ? updated : undefined);
+  };
+
   const renderProvinceCheckbox = (province: string) => (
     <div className="flex items-center space-x-2" key={province}>
       <Checkbox
@@ -289,20 +306,36 @@ export function FiltersPanel({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs font-medium uppercase tracking-wide">
-              State / Province
-            </Label>
-            <div className="space-y-4">
-              {regionsToDisplay.map((region) => (
-                <div key={region} className="space-y-2">
-                  <div className="text-sm font-medium text-muted-foreground">
-                    {region}
-                  </div>
-                  <div className="space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
-                    {regionStates[region].map((province) =>
-                      renderProvinceCheckbox(province)
-                    )}
+              <div className="space-y-2">
+                <Label className="text-xs font-medium uppercase tracking-wide">
+                  State / Province
+                </Label>
+                <div className="space-y-4">
+                  {regionsToDisplay.map((region) => (
+                    <div key={region} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
+                        <span>{region}</span>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`select-all-${region}`}
+                            checked={regionStates[region].every((province) =>
+                              filters.province?.includes(province)
+                            )}
+                            onCheckedChange={() => handleRegionSelectAll(region)}
+                            data-testid={`filter-region-${region}-select-all`}
+                          />
+                          <Label
+                            htmlFor={`select-all-${region}`}
+                            className="text-xs font-normal"
+                          >
+                            Select all
+                          </Label>
+                        </div>
+                      </div>
+                      <div className="space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
+                        {regionStates[region].map((province) =>
+                          renderProvinceCheckbox(province)
+                        )}
                   </div>
                 </div>
               ))}
