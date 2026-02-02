@@ -23,6 +23,7 @@ export async function syncGenderTagsToShopify(): Promise<number> {
   let updatedCount = 0;
   
   const result = await storage.getCustomers({ 
+    page: 1,
     pageSize: 10000,
     genderInferred: ["male", "female"] 
   });

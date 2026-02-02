@@ -3,7 +3,7 @@ import { db } from "./db";
 import { customers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { log } from "./index";
-import { upsertCustomerMetafield } from "./shopifyClient";
+import { updateCustomerTags } from "./shopifyClient";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const WRITE_BACK_TO_SHOPIFY = process.env.WRITE_BACK_TO_SHOPIFY === "true";
@@ -110,7 +110,14 @@ export async function enrichPendingCustomers(batchSize = 10): Promise<number> {
 
       if (WRITE_BACK_TO_SHOPIFY && result.gender !== "unknown") {
         try {
-          await upsertCustomerMetafield(customer.shopifyCustomerId, result.gender);
+          const genderTag = `gender:${result.gender}`;
+          const existingTags = customer.tags ? customer.tags.split(",").map(t => t.trim()) : [];
+          const otherTags = existingTags.filter(t => !t.startsWith("gender:"));
+          const newTags = [...otherTags, genderTag].join(", ");
+          
+          if (customer.tags !== newTags) {
+            await updateCustomerTags(customer.shopifyCustomerId, newTags);
+          }
         } catch (shopifyError) {
           log(`Failed to write back to Shopify for customer ${customer.id}: ${shopifyError}`, "enrichment");
         }
