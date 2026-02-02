@@ -2,7 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { customerExportFilterSchema, customerFilterSchema } from "@shared/schema";
-import { syncCustomers, startSyncSchedule, isSyncInProgress } from "./syncJob";
+import { syncCustomers, startSyncSchedule, isSyncInProgress, syncGenderTagsToShopify } from "./syncJob";
 import { verifyWebhookSignature } from "./shopifyClient";
 import { enrichAllPendingCustomers } from "./enrichment";
 import Papa from "papaparse";
@@ -245,6 +245,16 @@ export async function registerRoutes(
     } catch (error) {
       log(`Error fetching sync status: ${error}`, "api");
       res.status(500).json({ error: "Failed to fetch sync status" });
+    }
+  });
+
+  app.post("/api/admin/sync/gender-tags", async (_req: Request, res: Response) => {
+    try {
+      const count = await syncGenderTagsToShopify();
+      res.json({ message: "Gender tags synced to Shopify", count });
+    } catch (error) {
+      log(`Error syncing gender tags: ${error}`, "api");
+      res.status(500).json({ error: "Sync failed" });
     }
   });
 

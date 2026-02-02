@@ -1,19 +1,58 @@
 import cron from "node-cron";
 import { storage } from "./storage";
-import { fetchAllCustomers, type TransformedCustomer } from "./shopifyClient";
+import { fetchAllCustomers, type TransformedCustomer, updateCustomerTags } from "./shopifyClient";
 import { enrichPendingCustomers } from "./enrichment";
 import { log } from "./index";
-import type { InsertCustomer } from "@shared/schema";
+import type { InsertCustomer, Customer } from "@shared/schema";
 
 const INCREMENTAL_SYNC_START_DATE = process.env.INCREMENTAL_SYNC_START_DATE
   ? new Date(process.env.INCREMENTAL_SYNC_START_DATE)
   : undefined;
+
+const SYNC_GENDER_TO_TAGS = process.env.SYNC_GENDER_TO_TAGS === "true";
 
 let isSyncing = false;
 
 interface SyncCustomersOptions {
   incremental?: boolean;
   startDate?: Date;
+}
+
+export async function syncGenderTagsToShopify(): Promise<number> {
+  log("Starting bulk sync of gender tags to Shopify", "sync");
+  let updatedCount = 0;
+  
+  const result = await storage.getCustomers({ 
+    pageSize: 10000,
+    genderInferred: ["male", "female"] 
+  });
+  
+  for (const customer of result.data) {
+    try {
+      await applyGenderTag(customer);
+      updatedCount++;
+    } catch (error) {
+      log(`Failed to update gender tag for customer ${customer.shopifyCustomerId}: ${error}`, "sync");
+    }
+  }
+  
+  log(`Bulk sync completed: ${updatedCount} customers updated`, "sync");
+  return updatedCount;
+}
+
+async function applyGenderTag(customer: Customer | InsertCustomer): Promise<void> {
+  if (!customer.genderInferred || customer.genderInferred === "unknown") return;
+  
+  const genderTag = `gender:${customer.genderInferred}`;
+  const existingTags = customer.tags ? customer.tags.split(",").map(t => t.trim()) : [];
+  
+  // Safeguard: strictly handle gender tag only
+  const otherTags = existingTags.filter(t => !t.startsWith("gender:"));
+  const newTags = [...otherTags, genderTag].join(", ");
+  
+  if (customer.tags !== newTags) {
+    await updateCustomerTags(customer.shopifyCustomerId, newTags);
+  }
 }
 
 export async function syncCustomers({
@@ -88,7 +127,12 @@ export async function syncCustomers({
           genderConfidence: existing?.genderConfidence,
         };
 
-        await storage.upsertCustomer(insertData);
+        const upserted = await storage.upsertCustomer(insertData);
+        
+        // Automated tagging for known gender
+        if (SYNC_GENDER_TO_TAGS && upserted.genderInferred && upserted.genderInferred !== "unknown") {
+          await applyGenderTag(upserted);
+        }
         
         if (existing) {
           updated++;

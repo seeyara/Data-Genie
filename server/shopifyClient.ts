@@ -220,26 +220,17 @@ export async function fetchAllCustomers(
   return totalProcessed;
 }
 
-export async function upsertCustomerMetafield(
-  customerId: number,
-  gender: string
-): Promise<void> {
-  const endpoint = `/customers/${customerId}/metafields.json`;
-  
-  await shopifyFetch(endpoint, {
-    method: "POST",
+export async function updateCustomerTags(shopifyCustomerId: number, tags: string): Promise<void> {
+  await shopifyFetch(`/customers/${shopifyCustomerId}.json`, {
+    method: "PUT",
     body: JSON.stringify({
-      metafield: {
-        namespace: "marketing",
-        key: "inferred_gender",
-        type: "single_line_text_field",
-        value: gender,
-        description: "LLM-inferred gender used for marketing segmentation.",
+      customer: {
+        id: shopifyCustomerId,
+        tags: tags,
       },
     }),
   });
-  
-  log(`Updated metafield for customer ${customerId} with gender: ${gender}`, "shopify");
+  log(`Updated tags for customer ${shopifyCustomerId}: ${tags}`, "shopify");
 }
 
 export function verifyWebhookSignature(
